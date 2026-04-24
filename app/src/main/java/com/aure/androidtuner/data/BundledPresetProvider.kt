@@ -30,13 +30,6 @@ class BundledPresetProvider {
                 maxFrequencies = mapOf(0 to 1_785_600, 6 to 1_958_400),
                 source = ProfileSource.BUNDLED,
             ),
-            PerformanceProfile(
-                id = "bundled_reset",
-                name = "Stock",
-                maxFrequencies = mapOf(0 to cluster0.stockMaxFreq, 6 to cluster6.stockMaxFreq),
-                source = ProfileSource.BUNDLED,
-                isResetProfile = true,
-            ),
         ).filter { profile ->
             profile.maxFrequencies.all { (policyId, frequency) ->
                 val policy = policyIds[policyId] ?: return@all false
