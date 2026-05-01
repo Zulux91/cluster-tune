@@ -8,10 +8,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.aure.androidtuner.model.PerformanceProfile
 import com.aure.androidtuner.model.ProfileSource
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
-import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "android_tuner")
 
@@ -19,12 +17,15 @@ class ProfileStorage(private val context: Context) {
 
     private val profilesKey = stringPreferencesKey("user_profiles")
     private val lastValuesKey = stringPreferencesKey("last_values")
+    private val initialStockValuesKey = stringPreferencesKey("initial_stock_values")
+    private val stockBootIdKey = stringPreferencesKey("stock_boot_id")
     private val selectedProfileKey = stringPreferencesKey("selected_profile")
+    private val lastAppliedDisplayProfileKey = stringPreferencesKey("last_applied_display_profile")
     private val deletedBundledProfileIdsKey = stringSetPreferencesKey("deleted_bundled_profile_ids")
     private val displayOrderKey = stringPreferencesKey("display_order")
 
     val profiles: Flow<List<PerformanceProfile>> = context.dataStore.data.map { preferences ->
-        parseProfiles(preferences[profilesKey])
+        PresetJsonCodec.parseProfiles(preferences[profilesKey])
     }
 
     val deletedBundledProfileIds: Flow<Set<String>> = context.dataStore.data.map { preferences ->
@@ -36,32 +37,44 @@ class ProfileStorage(private val context: Context) {
     }
 
     val lastValues: Flow<Map<Int, Int>> = context.dataStore.data.map { preferences ->
-        parseIntMap(preferences[lastValuesKey])
+        PresetJsonCodec.parseIntMap(preferences[lastValuesKey])
+    }
+
+    val initialStockValues: Flow<Map<Int, Int>> = context.dataStore.data.map { preferences ->
+        PresetJsonCodec.parseIntMap(preferences[initialStockValuesKey])
+    }
+
+    val stockBootId: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[stockBootIdKey]
     }
 
     val selectedProfileId: Flow<String?> = context.dataStore.data.map { preferences ->
         preferences[selectedProfileKey]
     }
 
+    val lastAppliedDisplayProfileId: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[lastAppliedDisplayProfileKey]
+    }
+
     suspend fun saveProfile(profile: PerformanceProfile) {
         context.dataStore.edit { preferences ->
-            val current = parseProfiles(preferences[profilesKey]).toMutableList()
+            val current = PresetJsonCodec.parseProfiles(preferences[profilesKey]).toMutableList()
             current.removeAll { it.id == profile.id }
             current.add(profile)
-            preferences[profilesKey] = encodeProfiles(normalizeOrders(current))
+            preferences[profilesKey] = PresetJsonCodec.encodeProfiles(normalizeOrders(current))
         }
     }
 
     suspend fun deleteProfile(profileId: String) {
         context.dataStore.edit { preferences ->
-            val current = parseProfiles(preferences[profilesKey]).filterNot { it.id == profileId }
-            preferences[profilesKey] = encodeProfiles(normalizeOrders(current))
+            val current = PresetJsonCodec.parseProfiles(preferences[profilesKey]).filterNot { it.id == profileId }
+            preferences[profilesKey] = PresetJsonCodec.encodeProfiles(normalizeOrders(current))
         }
     }
 
     suspend fun replaceProfiles(profiles: List<PerformanceProfile>) {
         context.dataStore.edit { preferences ->
-            preferences[profilesKey] = encodeProfiles(
+            preferences[profilesKey] = PresetJsonCodec.encodeProfiles(
                 profiles.mapIndexed { index, profile ->
                     profile.copy(
                         order = index,
@@ -109,7 +122,19 @@ class ProfileStorage(private val context: Context) {
 
     suspend fun persistLastValues(values: Map<Int, Int>) {
         context.dataStore.edit { preferences ->
-            preferences[lastValuesKey] = encodeIntMap(values)
+            preferences[lastValuesKey] = PresetJsonCodec.encodeIntMap(values)
+        }
+    }
+
+    suspend fun persistInitialStockValues(values: Map<Int, Int>) {
+        context.dataStore.edit { preferences ->
+            preferences[initialStockValuesKey] = PresetJsonCodec.encodeIntMap(values)
+        }
+    }
+
+    suspend fun persistStockBootId(bootId: String) {
+        context.dataStore.edit { preferences ->
+            preferences[stockBootIdKey] = bootId
         }
     }
 
@@ -123,76 +148,20 @@ class ProfileStorage(private val context: Context) {
         }
     }
 
-    private fun encodeProfiles(profiles: List<PerformanceProfile>): String {
-        val array = JSONArray()
-        profiles.forEach { profile ->
-            array.put(
-                JSONObject()
-                    .put("id", profile.id)
-                    .put("name", profile.name)
-                    .put("source", profile.source.name)
-                    .put("isResetProfile", profile.isResetProfile)
-                    .put("order", profile.order)
-                    .put("isEditable", profile.isEditable)
-                    .put("isDeletable", profile.isDeletable)
-                    .put("maxFrequencies", JSONObject(encodeIntMap(profile.maxFrequencies))),
-            )
-        }
-        return array.toString()
-    }
-
-    private fun parseProfiles(raw: String?): List<PerformanceProfile> {
-        if (raw.isNullOrBlank()) return emptyList()
-        return runCatching {
-            val array = JSONArray(raw)
-            buildList {
-                for (index in 0 until array.length()) {
-                    val item = array.getJSONObject(index)
-                    add(
-                        PerformanceProfile(
-                            id = item.getString("id"),
-                            name = item.getString("name"),
-                            maxFrequencies = parseIntMap(item.get("maxFrequencies").toString()),
-                            source = ProfileSource.valueOf(item.optString("source", ProfileSource.USER.name)),
-                            isResetProfile = item.optBoolean("isResetProfile", false),
-                            order = item.optInt("order", index),
-                            isEditable = item.optBoolean("isEditable", true),
-                            isDeletable = item.optBoolean("isDeletable", true),
-                        ),
-                    )
-                }
+    suspend fun persistLastAppliedDisplayProfile(profileId: String?) {
+        context.dataStore.edit { preferences ->
+            if (profileId == null) {
+                preferences.remove(lastAppliedDisplayProfileKey)
+            } else {
+                preferences[lastAppliedDisplayProfileKey] = profileId
             }
-        }.getOrDefault(emptyList()).sortedBy { it.order }
-    }
-
-    private fun encodeIntMap(values: Map<Int, Int>): String {
-        val json = JSONObject()
-        values.toSortedMap().forEach { (key, value) -> json.put(key.toString(), value) }
-        return json.toString()
+        }
     }
 
     private fun encodeStringList(values: List<String>): String {
         val array = JSONArray()
         values.forEach(array::put)
         return array.toString()
-    }
-
-    private fun parseIntMap(raw: String?): Map<Int, Int> {
-        if (raw.isNullOrBlank()) return emptyMap()
-        return runCatching {
-            val json = JSONObject(raw)
-            buildMap {
-                val keys = json.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    val intKey = key.toIntOrNull() ?: continue
-                    val value = json.optInt(key)
-                    if (value > 0) {
-                        put(intKey, value)
-                    }
-                }
-            }
-        }.getOrDefault(emptyMap())
     }
 
     private fun parseStringList(raw: String?): List<String> {

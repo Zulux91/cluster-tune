@@ -1,6 +1,10 @@
 package com.aure.androidtuner.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -8,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -23,19 +29,34 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.aure.androidtuner.model.AppColorSource
 import com.aure.androidtuner.model.AppSettings
 import com.aure.androidtuner.model.TileInteractionBehavior
+
+private val accentColorOptions = listOf(
+    0xFF3F51B5.toInt(),
+    0xFF006E1C.toInt(),
+    0xFFB3261E.toInt(),
+    0xFF8E24AA.toInt(),
+    0xFF00639A.toInt(),
+    0xFF9A4600.toInt(),
+)
 
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
     onBack: () -> Unit,
+    onColorSourceChange: (AppColorSource) -> Unit,
+    onAccentColorChange: (Int) -> Unit,
     onTileTapBehaviorChange: (TileInteractionBehavior) -> Unit,
     onTileLongPressBehaviorChange: (TileInteractionBehavior) -> Unit,
     onApplyLastPresetOnBootChange: (Boolean) -> Unit,
     onResetProfiles: () -> Unit,
+    onExportPresets: () -> Unit,
+    onImportPresets: () -> Unit,
 ) {
     var showResetConfirmation by remember { mutableStateOf(false) }
 
@@ -65,6 +86,32 @@ fun SettingsScreen(
             }
             TextButton(onClick = onBack) {
                 Text("Done")
+            }
+        }
+
+        SettingsSection(title = "Colors") {
+            ThemeModeSelector(
+                selected = settings.colorSource,
+                onChange = onColorSourceChange,
+            )
+            if (settings.colorSource == AppColorSource.CUSTOM_ACCENT) {
+                Text(
+                    text = "Accent color",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    accentColorOptions.forEach { accentColor ->
+                        AccentSwatch(
+                            color = Color(accentColor),
+                            selected = settings.accentColor == accentColor,
+                            onClick = { onAccentColorChange(accentColor) },
+                        )
+                    }
+                }
             }
         }
 
@@ -111,6 +158,26 @@ fun SettingsScreen(
 
         SettingsSection(title = "Presets") {
             Text(
+                text = "Share presets",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "Export presets to JSON or import a shared preset file.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+            ) {
+                TextButton(onClick = onImportPresets) {
+                    Text("Import")
+                }
+                TextButton(onClick = onExportPresets) {
+                    Text("Export")
+                }
+            }
+            Text(
                 text = "Reset presets to default",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
@@ -152,6 +219,80 @@ fun SettingsScreen(
             },
         )
     }
+}
+
+@Composable
+private fun ThemeModeSelector(
+    selected: AppColorSource,
+    onChange: (AppColorSource) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ThemeModeOption(
+            title = "System colors",
+            description = "Follow Material You colors from the system.",
+            selected = selected == AppColorSource.SYSTEM,
+            onClick = { onChange(AppColorSource.SYSTEM) },
+        )
+        ThemeModeOption(
+            title = "Custom accent",
+            description = "Build the app palette from one accent color.",
+            selected = selected == AppColorSource.CUSTOM_ACCENT,
+            onClick = { onChange(AppColorSource.CUSTOM_ACCENT) },
+        )
+    }
+}
+
+@Composable
+private fun ThemeModeOption(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+        )
+        Column(
+            modifier = Modifier
+                .padding(start = 8.dp)
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccentSwatch(
+    color: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .background(color, CircleShape)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                shape = CircleShape,
+            )
+            .clickable(onClick = onClick),
+    )
 }
 
 @Composable

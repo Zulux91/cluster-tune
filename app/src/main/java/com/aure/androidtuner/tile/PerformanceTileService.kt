@@ -1,5 +1,7 @@
 package com.aure.androidtuner.tile
 
+import android.app.PendingIntent
+import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
@@ -29,7 +31,7 @@ class PerformanceTileService : TileService() {
                     else -> state.activeDisplayProfileName ?: getString(R.string.tile_state_manual)
                 }
                 this.state = when {
-                    !state.isPServerAvailable -> Tile.STATE_UNAVAILABLE
+                    !state.isPServerAvailable -> Tile.STATE_INACTIVE
                     state.activeDisplayProfileId == com.aure.androidtuner.model.PresetStateResolver.STOCK_PROFILE_ID -> Tile.STATE_INACTIVE
                     else -> Tile.STATE_ACTIVE
                 }
@@ -40,7 +42,7 @@ class PerformanceTileService : TileService() {
             qsTile?.apply {
                 label = getString(R.string.tile_title)
                 subtitle = getString(R.string.tile_state_unavailable)
-                state = Tile.STATE_UNAVAILABLE
+                state = Tile.STATE_INACTIVE
                 updateTile()
             }
         }
@@ -62,7 +64,7 @@ class PerformanceTileService : TileService() {
             val settings = runBlocking { container.settingsStorage.settings.first() }
             when (settings.tileTapBehavior) {
                 TileInteractionBehavior.SHOW_DIALOG -> {
-                    startActivityAndCollapse(TileControlActivity.createDialogIntent(applicationContext))
+                    launchDialogAndCollapse()
                 }
                 TileInteractionBehavior.CYCLE_PRESETS -> {
                     runBlocking {
@@ -80,6 +82,22 @@ class PerformanceTileService : TileService() {
             }
         }.onFailure { throwable ->
             Log.e(TAG, "Failed to handle tile tap", throwable)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun launchDialogAndCollapse() {
+        val intent = TileControlActivity.createDialogIntent(applicationContext)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val pendingIntent = PendingIntent.getActivity(
+                applicationContext,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            startActivityAndCollapse(pendingIntent)
+        } else {
+            startActivityAndCollapse(intent)
         }
     }
 }

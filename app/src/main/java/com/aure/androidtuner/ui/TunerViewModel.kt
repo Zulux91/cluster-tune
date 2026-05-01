@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.aure.androidtuner.data.PerformanceRepository
 import com.aure.androidtuner.data.SettingsStorage
+import com.aure.androidtuner.model.AppColorSource
 import com.aure.androidtuner.model.AppSettings
 import com.aure.androidtuner.model.CpuPolicyInfo
 import com.aure.androidtuner.model.PerformanceProfile
@@ -93,34 +94,31 @@ class TunerViewModel(
         transientError.value = null
 
         viewModelScope.launch {
-            val selectedProfile = state.displayProfiles
-                .firstOrNull { it.id == state.selectedDisplayProfileId }
+            val appliedProfile = state.displayProfiles.firstOrNull { profile ->
+                PresetStateResolver.matchesProfile(state.currentValues, profile)
+            }
             val applyResult = repository.applyValues(
                 policies = state.policies,
                 selectedValues = state.currentValues,
-                isReset = state.selectedDisplayProfileId == PresetStateResolver.STOCK_PROFILE_ID,
+                isReset = appliedProfile?.id == PresetStateResolver.STOCK_PROFILE_ID,
+                appliedDisplayProfileId = appliedProfile?.id ?: PresetStateResolver.MANUAL_PROFILE_ID,
             )
             applyResult.onSuccess { outcome ->
                 edits.value = emptyMap()
-                repository.refresh()
                 transientMessage.value = if (outcome.verificationPassed) {
-                    buildAppliedMessage(state, selectedProfile, outcome.commandOutput)
+                    buildAppliedMessage(appliedProfile, outcome.commandOutput)
                 } else {
                     buildVerificationFailureMessage(state, outcome.actualValues, outcome.commandOutput)
                 }
                 if (outcome.verificationPassed) {
-                    onApplied(selectedProfile?.name ?: "Manual")
+                    onApplied(appliedProfile?.name ?: "Manual")
                 }
                 transientError.value = null
             }.onFailure { throwable ->
                 transientError.value = throwable.message ?: "Failed to apply limits"
             }
             if (applyResult.isSuccess) {
-                repository.selectProfile(
-                    state.selectedDisplayProfileId?.takeUnless { displayId ->
-                        displayId == PresetStateResolver.MANUAL_PROFILE_ID || displayId == PresetStateResolver.STOCK_PROFILE_ID
-                    },
-                )
+                repository.selectProfile(appliedProfile?.id?.takeUnless { it == PresetStateResolver.STOCK_PROFILE_ID })
             }
         }
     }
@@ -181,6 +179,21 @@ class TunerViewModel(
         }
     }
 
+    suspend fun exportProfilesJson(): String {
+        return repository.exportProfilesJson()
+    }
+
+    suspend fun importProfilesJson(rawJson: String): Int {
+        val importedCount = repository.importProfilesJson(rawJson)
+        transientMessage.value = if (importedCount == 1) {
+            "Imported 1 preset"
+        } else {
+            "Imported $importedCount presets"
+        }
+        transientError.value = null
+        return importedCount
+    }
+
     fun setTileTapBehavior(behavior: TileInteractionBehavior) {
         viewModelScope.launch {
             settingsStorage.persistTileTapBehavior(behavior)
@@ -199,8 +212,24 @@ class TunerViewModel(
         }
     }
 
-    fun refreshState() {
-        repository.refresh()
+    fun setColorSource(colorSource: AppColorSource) {
+        viewModelScope.launch {
+            settingsStorage.persistColorSource(colorSource)
+        }
+    }
+
+    fun setAccentColor(accentColor: Int) {
+        viewModelScope.launch {
+            settingsStorage.persistAccentColor(accentColor)
+        }
+    }
+
+    fun refreshStructureState() {
+        repository.refreshStructure()
+    }
+
+    fun refreshLiveState() {
+        repository.refreshLiveValues()
     }
 
     private fun snapToSupported(policy: CpuPolicyInfo, rawValue: Int): Int {
@@ -221,12 +250,11 @@ class TunerViewModel(
     }
 
     private fun buildAppliedMessage(
-        state: TunerState,
-        selectedProfile: PerformanceProfile?,
+        appliedProfile: PerformanceProfile?,
         commandOutput: String?,
     ): String {
-        val base = if (selectedProfile != null) {
-            "Applied preset: ${selectedProfile.name}"
+        val base = if (appliedProfile != null) {
+            "Applied preset: ${appliedProfile.name}"
         } else {
             "Applied preset: Manual"
         }

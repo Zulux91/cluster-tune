@@ -6,7 +6,7 @@ object PresetStateResolver {
     const val STOCK_PROFILE_ID = "virtual_stock"
 
     fun resolve(state: TunerState, currentValues: Map<Int, Int> = state.currentValues): TunerState {
-        val stockProfile = buildStockProfile(state.policies)
+        val stockProfile = buildStockProfile(state.policies, state.stockValues)
         val realProfiles = (state.bundledProfiles + state.userProfiles).sortedBy { it.order }
         val userProfiles = realProfiles.filter { it.source == ProfileSource.USER }
         val bundledProfiles = realProfiles.filter { it.source == ProfileSource.BUNDLED }
@@ -35,16 +35,8 @@ object PresetStateResolver {
             bundledProfiles = bundledProfiles,
             userProfiles = userProfiles,
             displayProfiles = displayProfiles,
-            selectedDisplayProfileId = when {
-                selectedProfile != null -> selectedProfile.id
-                hasPolicies -> MANUAL_PROFILE_ID
-                else -> null
-            },
-            selectedDisplayProfileName = when {
-                selectedProfile != null -> selectedProfile.name
-                hasPolicies -> "Manual"
-                else -> null
-            },
+            selectedDisplayProfileId = selectedProfile?.id,
+            selectedDisplayProfileName = selectedProfile?.name,
             activeDisplayProfileId = when {
                 activeProfile != null -> activeProfile.id
                 hasPolicies -> MANUAL_PROFILE_ID
@@ -60,12 +52,17 @@ object PresetStateResolver {
         )
     }
 
-    fun buildStockProfile(policies: List<CpuPolicyInfo>): PerformanceProfile? {
+    fun buildStockProfile(
+        policies: List<CpuPolicyInfo>,
+        stockValues: Map<Int, Int>,
+    ): PerformanceProfile? {
         if (policies.isEmpty()) return null
         return PerformanceProfile(
             id = STOCK_PROFILE_ID,
             name = "Stock",
-            maxFrequencies = policies.associate { it.id to it.stockMaxFreq },
+            maxFrequencies = policies.associate { policy ->
+                policy.id to (stockValues[policy.id] ?: policy.stockMaxFreq)
+            },
             source = ProfileSource.VIRTUAL,
             isResetProfile = true,
             isEditable = false,

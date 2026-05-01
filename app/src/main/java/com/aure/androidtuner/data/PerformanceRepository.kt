@@ -7,15 +7,51 @@ import com.aure.androidtuner.model.ProfileSource
 import com.aure.androidtuner.model.TunerState
 import com.aure.androidtuner.root.PerformanceCommandBuilder
 import com.aure.androidtuner.root.RootCommandRunner
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import java.util.UUID
 
+private data class StorageState(
+    val storedProfiles: List<PerformanceProfile>,
+    val deletedBundledProfileIds: Set<String>,
+    val displayOrder: List<String>,
+    val lastValues: Map<Int, Int>,
+    val initialStockValues: Map<Int, Int>,
+    val stockBootId: String?,
+    val selectedProfileId: String?,
+)
+
+private data class PartialStorageState(
+    val storedProfiles: List<PerformanceProfile>,
+    val deletedBundledProfileIds: Set<String>,
+    val displayOrder: List<String>,
+    val lastValues: Map<Int, Int>,
+    val initialStockValues: Map<Int, Int>,
+)
+
+private data class StockCaptureState(
+    val bootId: String? = null,
+    val lastRead: Map<Int, Int>? = null,
+    val consecutiveEqualReads: Int = 0,
+    val attempts: Int = 0,
+    val error: String? = null,
+)
+
+private data class StockBootstrapResult(
+    val completedValues: Map<Int, Int>?,
+    val isReadyForBoot: Boolean,
+    val isReading: Boolean,
+    val error: String?,
+)
+
 class PerformanceRepository(
     private val detector: CpuPolicyDetector,
+    private val bootIdReader: BootIdReader,
     private val bundledPresetProvider: BundledPresetProvider,
     private val profileStorage: ProfileStorage,
     private val commandBuilder: PerformanceCommandBuilder,
@@ -27,96 +63,157 @@ class PerformanceRepository(
         val commandOutput: String?,
     )
 
-    private val refreshToken = MutableStateFlow(0)
+    private val structureRefreshToken = MutableStateFlow(0)
+    private val liveRefreshToken = MutableStateFlow(0)
+    private var stockCaptureState = StockCaptureState()
+    private var cachedPolicies: List<CpuPolicyInfo> = emptyList()
+    private var cachedStructureVersion = Int.MIN_VALUE
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun observeState(): Flow<TunerState> {
         val storageState = combine(
             profileStorage.profiles,
             profileStorage.deletedBundledProfileIds,
             profileStorage.displayOrder,
             profileStorage.lastValues,
-            profileStorage.selectedProfileId,
-        ) { storedProfiles, deletedBundledProfileIds, displayOrder, lastValues, selectedProfileId ->
-            StorageState(
+            profileStorage.initialStockValues,
+        ) { storedProfiles, deletedBundledProfileIds, displayOrder, lastValues, initialStockValues ->
+            PartialStorageState(
                 storedProfiles = storedProfiles,
                 deletedBundledProfileIds = deletedBundledProfileIds,
                 displayOrder = displayOrder,
                 lastValues = lastValues,
+                initialStockValues = initialStockValues,
+            )
+        }
+        val completeStorageState = combine(
+            storageState,
+            profileStorage.selectedProfileId,
+            profileStorage.stockBootId,
+        ) { partial, selectedProfileId, stockBootId ->
+            StorageState(
+                storedProfiles = partial.storedProfiles,
+                deletedBundledProfileIds = partial.deletedBundledProfileIds,
+                displayOrder = partial.displayOrder,
+                lastValues = partial.lastValues,
+                initialStockValues = partial.initialStockValues,
+                stockBootId = stockBootId,
                 selectedProfileId = selectedProfileId,
             )
         }
         return combine(
-            refreshToken,
-            storageState,
-        ) { _, storage ->
-            val policies = detector.detectPolicies()
-            val defaultBundledProfiles = bundledPresetProvider.createProfiles(policies)
-            val storedById = storage.storedProfiles.associateBy { it.id }
-            val knownBundledIds = defaultBundledProfiles.map { it.id }.toSet()
-            val bundledProfiles = defaultBundledProfiles.mapIndexed { index, profile ->
-                if (profile.id in storage.deletedBundledProfileIds) {
-                    null
+            structureRefreshToken,
+            liveRefreshToken,
+            completeStorageState,
+        ) { structureVersion, _, storage -> structureVersion to storage }
+            .transformLatest { (structureVersion, storage) ->
+                val policies = if (cachedPolicies.isEmpty() || cachedStructureVersion != structureVersion) {
+                    detector.detectPolicies().also {
+                        cachedPolicies = it
+                        cachedStructureVersion = structureVersion
+                    }
                 } else {
-                    val stored = storedById[profile.id]
-                    if (stored != null) {
-                        profile.copy(
-                            name = stored.name,
-                            maxFrequencies = stored.maxFrequencies,
-                            order = stored.order,
-                            isEditable = true,
-                            isDeletable = true,
-                        )
-                    } else {
-                        profile.copy(
-                            order = index,
-                            isEditable = true,
-                            isDeletable = true,
-                        )
+                    val liveValues = detector.readCurrentMaxValues(cachedPolicies)
+                    cachedPolicies.map { policy ->
+                        policy.copy(currentMaxFreq = liveValues[policy.id] ?: policy.currentMaxFreq)
                     }
                 }
-            }.filterNotNull()
-            val userProfiles = storage.storedProfiles
-                .filter { it.source == ProfileSource.USER && it.id !in knownBundledIds }
-            val orderedRealProfiles = applyDisplayOrder(
-                profiles = bundledProfiles + userProfiles,
-                orderedIds = storage.displayOrder,
-            )
-            val actualValues = policies.associate { it.id to it.currentMaxFreq }
-            val defaultValues = policies.associate { it.id to it.currentMaxFreq }
-            PresetStateResolver.resolve(
-                TunerState(
-                    isLoading = false,
-                    isPServerAvailable = rootCommandRunner.isAvailable,
-                    policies = policies,
-                    actualValues = actualValues,
-                    currentValues = mergeValues(policies, defaultValues, storage.lastValues),
-                    bundledProfiles = orderedRealProfiles.filter { it.source == ProfileSource.BUNDLED },
-                    userProfiles = orderedRealProfiles.filter { it.source == ProfileSource.USER },
-                    selectedProfileId = storage.selectedProfileId?.takeIf { id ->
-                        orderedRealProfiles.any { it.id == id }
-                    },
-                    displayProfiles = PresetStateResolver.buildDisplayProfiles(
-                        realProfiles = orderedRealProfiles,
-                        stockProfile = PresetStateResolver.buildStockProfile(policies),
-                        orderedIds = storage.displayOrder,
+                val actualValues = policies.associate { it.id to it.currentMaxFreq }
+                val detectedStockValues = actualValues
+                val currentBootId = bootIdReader.currentBootId()
+                val stockBootstrap = resolveStockBootstrap(
+                    bootId = currentBootId,
+                    detectedValues = detectedStockValues,
+                    storedValues = storage.initialStockValues,
+                    storedBootId = storage.stockBootId,
+                )
+                if (stockBootstrap.completedValues != null &&
+                    (stockBootstrap.completedValues != storage.initialStockValues || storage.stockBootId != currentBootId)
+                ) {
+                    profileStorage.persistInitialStockValues(stockBootstrap.completedValues)
+                    profileStorage.persistStockBootId(currentBootId)
+                }
+                val defaultBundledProfiles = bundledPresetProvider.createProfiles(policies)
+                val storedById = storage.storedProfiles.associateBy { it.id }
+                val knownBundledIds = defaultBundledProfiles.map { it.id }.toSet()
+                val bundledProfiles = defaultBundledProfiles.mapIndexed { index, profile ->
+                    if (profile.id in storage.deletedBundledProfileIds) {
+                        null
+                    } else {
+                        val stored = storedById[profile.id]
+                        if (stored != null) {
+                            profile.copy(
+                                name = stored.name,
+                                maxFrequencies = stored.maxFrequencies,
+                                order = stored.order,
+                                isEditable = true,
+                                isDeletable = true,
+                            )
+                        } else {
+                            profile.copy(
+                                order = index,
+                                isEditable = true,
+                                isDeletable = true,
+                            )
+                        }
+                    }
+                }.filterNotNull()
+                val userProfiles = storage.storedProfiles
+                    .filter { it.source == ProfileSource.USER && it.id !in knownBundledIds }
+                val orderedRealProfiles = applyDisplayOrder(
+                    profiles = bundledProfiles + userProfiles,
+                    orderedIds = storage.displayOrder,
+                )
+                val defaultValues = policies.associate { it.id to it.currentMaxFreq }
+                val stockValues = stockBootstrap.completedValues.orEmpty()
+                val stockProfile = if (stockBootstrap.isReadyForBoot) {
+                    PresetStateResolver.buildStockProfile(
+                        policies = policies,
+                        stockValues = stockValues,
+                    )
+                } else {
+                    null
+                }
+                emit(
+                    PresetStateResolver.resolve(
+                        TunerState(
+                            isLoading = false,
+                            isPServerAvailable = rootCommandRunner.isAvailable,
+                            policies = policies,
+                            actualValues = actualValues,
+                            currentValues = mergeValues(policies, defaultValues, storage.lastValues),
+                            stockValues = stockValues,
+                            isReadingStockValues = stockBootstrap.isReading,
+                            stockReadError = stockBootstrap.error,
+                            bundledProfiles = orderedRealProfiles.filter { it.source == ProfileSource.BUNDLED },
+                            userProfiles = orderedRealProfiles.filter { it.source == ProfileSource.USER },
+                            selectedProfileId = storage.selectedProfileId?.takeIf { id ->
+                                orderedRealProfiles.any { it.id == id }
+                            },
+                            displayProfiles = PresetStateResolver.buildDisplayProfiles(
+                                realProfiles = orderedRealProfiles,
+                                stockProfile = stockProfile,
+                                orderedIds = storage.displayOrder,
+                            ),
+                        ),
                     ),
-                ),
-            )
-        }
+                )
+            }
     }
 
     suspend fun applyValues(
         policies: List<CpuPolicyInfo>,
         selectedValues: Map<Int, Int>,
         isReset: Boolean,
+        appliedDisplayProfileId: String?,
     ): Result<ApplyOutcome> {
         val filtered = selectedValues.filterKeys { policyId -> policies.any { it.id == policyId } }
         val script = commandBuilder.buildApplyScript(policies, filtered, isReset)
         return rootCommandRunner.executeScript(script).mapCatching { output ->
             profileStorage.persistLastValues(filtered)
-            val refreshedPolicies = detector.detectPolicies()
-            val actualValues = refreshedPolicies.associate { it.id to it.currentMaxFreq }
-            refresh()
+            profileStorage.persistLastAppliedDisplayProfile(appliedDisplayProfileId)
+            val actualValues = detector.readCurrentMaxValues(policies)
+            refreshLiveValues()
             ApplyOutcome(
                 actualValues = actualValues,
                 verificationPassed = filtered.all { (policyId, requestedValue) ->
@@ -125,6 +222,36 @@ class PerformanceRepository(
                 commandOutput = output,
             )
         }
+    }
+
+    suspend fun applyPersistedLastValuesOnBoot(): Result<ApplyOutcome> {
+        if (!rootCommandRunner.isAvailable) {
+            return Result.failure(IllegalStateException("PServer not available"))
+        }
+        val policies = detector.detectPolicies()
+        if (policies.isEmpty()) {
+            return Result.failure(IllegalStateException("No CPU policies found"))
+        }
+        val persistedValues = profileStorage.lastValues.first()
+        if (persistedValues.isEmpty()) {
+            return Result.failure(IllegalStateException("No stored values to apply"))
+        }
+        val lastAppliedDisplayProfileId = profileStorage.lastAppliedDisplayProfileId.first()
+        if (lastAppliedDisplayProfileId == PresetStateResolver.STOCK_PROFILE_ID) {
+            return Result.failure(IllegalStateException("Boot apply skipped: stock is active"))
+        }
+        val filteredValues = persistedValues.filterKeys { policyId ->
+            policies.any { it.id == policyId }
+        }
+        if (filteredValues.isEmpty()) {
+            return Result.failure(IllegalStateException("No stored values match detected policies"))
+        }
+        return applyValues(
+            policies = policies,
+            selectedValues = filteredValues,
+            isReset = false,
+            appliedDisplayProfileId = lastAppliedDisplayProfileId,
+        )
     }
 
     suspend fun cycleTilePreset(): Result<PerformanceProfile> {
@@ -149,9 +276,9 @@ class PerformanceRepository(
             policies = state.policies,
             selectedValues = nextProfile.maxFrequencies,
             isReset = nextProfile.id == PresetStateResolver.STOCK_PROFILE_ID,
+            appliedDisplayProfileId = nextProfile.id,
         ).map {
             selectProfile(nextProfile.id.takeUnless { id -> id == PresetStateResolver.STOCK_PROFILE_ID })
-            refresh()
             nextProfile
         }
     }
@@ -167,6 +294,68 @@ class PerformanceRepository(
                 order = currentProfiles.size,
             ),
         )
+    }
+
+    suspend fun exportProfilesJson(): String {
+        val profiles = realProfiles()
+            .filter { profile -> profile.source != ProfileSource.VIRTUAL }
+            .mapIndexed { index, profile ->
+                profile.copy(
+                    order = index,
+                    isEditable = true,
+                    isDeletable = true,
+                )
+            }
+        return PresetJsonCodec.encodeShareFile(
+            profiles = profiles,
+            socModel = bundledPresetProvider.currentSocModel(),
+        )
+    }
+
+    suspend fun importProfilesJson(rawJson: String): Int {
+        val state = observeState().first()
+        val policyIds = state.policies.associateBy { it.id }
+        val currentProfiles = state.displayProfiles.filter { it.source != ProfileSource.VIRTUAL }
+        val bundledProfilesById = currentProfiles
+            .filter { it.source == ProfileSource.BUNDLED }
+            .associateBy { it.id }
+        val validProfiles = PresetJsonCodec.parseProfiles(rawJson)
+            .filter { profile ->
+                profile.maxFrequencies.isNotEmpty() &&
+                    profile.maxFrequencies.all { (policyId, frequency) ->
+                        val policy = policyIds[policyId] ?: return@all false
+                        frequency in policy.supportedFrequencies || frequency == policy.stockMaxFreq
+                    }
+            }
+
+        var createdUserProfiles = 0
+        validProfiles.forEach { importedProfile ->
+            val bundledProfile = bundledProfilesById[importedProfile.id]
+            if (bundledProfile != null) {
+                profileStorage.unmarkBundledProfileDeleted(bundledProfile.id)
+                profileStorage.saveProfile(
+                    bundledProfile.copy(
+                        name = importedProfile.name,
+                        maxFrequencies = importedProfile.maxFrequencies,
+                        isEditable = true,
+                        isDeletable = true,
+                    ),
+                )
+            } else {
+                profileStorage.saveProfile(
+                    importedProfile.copy(
+                        id = "user_${UUID.randomUUID()}",
+                        source = ProfileSource.USER,
+                        order = currentProfiles.size + createdUserProfiles,
+                        isResetProfile = false,
+                        isEditable = true,
+                        isDeletable = true,
+                    ),
+                )
+                createdUserProfiles += 1
+            }
+        }
+        return validProfiles.size
     }
 
     suspend fun updateProfile(profileId: String, name: String, values: Map<Int, Int>) {
@@ -193,7 +382,6 @@ class PerformanceRepository(
         if (profileStorage.selectedProfileId.first() == profileId) {
             profileStorage.persistSelectedProfile(null)
         }
-        refresh()
     }
 
     suspend fun moveProfile(profileId: String, offset: Int) {
@@ -216,15 +404,18 @@ class PerformanceRepository(
     suspend fun resetProfilesToDefault() {
         profileStorage.resetProfiles()
         profileStorage.persistSelectedProfile(null)
-        refresh()
     }
 
     suspend fun selectProfile(profileId: String?) {
         profileStorage.persistSelectedProfile(profileId)
     }
 
-    fun refresh() {
-        refreshToken.update { it + 1 }
+    fun refreshStructure() {
+        structureRefreshToken.update { it + 1 }
+    }
+
+    fun refreshLiveValues() {
+        liveRefreshToken.update { it + 1 }
     }
 
     private fun mergeValues(
@@ -249,6 +440,64 @@ class PerformanceRepository(
         return state.displayProfiles.filter { it.source != ProfileSource.VIRTUAL }
     }
 
+    private fun resolveStockBootstrap(
+        bootId: String,
+        detectedValues: Map<Int, Int>,
+        storedValues: Map<Int, Int>,
+        storedBootId: String?,
+    ): StockBootstrapResult {
+        if (detectedValues.isEmpty()) {
+            stockCaptureState = StockCaptureState()
+            return StockBootstrapResult(
+                completedValues = if (storedBootId == bootId) storedValues else null,
+                isReadyForBoot = storedBootId == bootId && storedValues.isNotEmpty(),
+                isReading = false,
+                error = null,
+            )
+        }
+
+        val hasStoredValuesForBoot = storedBootId == bootId && storedValues.isNotEmpty()
+        if (hasStoredValuesForBoot) {
+            stockCaptureState = StockCaptureState(bootId = bootId)
+            return StockBootstrapResult(
+                completedValues = storedValues,
+                isReadyForBoot = true,
+                isReading = false,
+                error = null,
+            )
+        }
+
+        val previous = stockCaptureState.takeIf { it.bootId == bootId } ?: StockCaptureState(bootId = bootId)
+        val consecutiveEqualReads = if (previous.lastRead == detectedValues) {
+            previous.consecutiveEqualReads + 1
+        } else {
+            1
+        }
+        val attempts = previous.attempts + 1
+        val nextState = previous.copy(
+            lastRead = detectedValues,
+            consecutiveEqualReads = consecutiveEqualReads,
+            attempts = attempts,
+            error = when {
+                consecutiveEqualReads >= REQUIRED_STABLE_READS -> null
+                attempts >= MAX_STOCK_READ_ATTEMPTS -> "Unable to read stable stock values"
+                else -> null
+            },
+        )
+        stockCaptureState = nextState
+
+        val completedValues = when {
+            consecutiveEqualReads >= REQUIRED_STABLE_READS -> detectedValues
+            else -> null
+        }
+        return StockBootstrapResult(
+            completedValues = completedValues,
+            isReadyForBoot = completedValues != null,
+            isReading = completedValues == null && nextState.error == null,
+            error = nextState.error,
+        )
+    }
+
     private fun applyDisplayOrder(
         profiles: List<PerformanceProfile>,
         orderedIds: List<String>,
@@ -260,11 +509,8 @@ class PerformanceRepository(
         return ordered + missing
     }
 
-    private data class StorageState(
-        val storedProfiles: List<PerformanceProfile>,
-        val deletedBundledProfileIds: Set<String>,
-        val displayOrder: List<String>,
-        val lastValues: Map<Int, Int>,
-        val selectedProfileId: String?,
-    )
+    private companion object {
+        const val REQUIRED_STABLE_READS = 3
+        const val MAX_STOCK_READ_ATTEMPTS = 10
+    }
 }

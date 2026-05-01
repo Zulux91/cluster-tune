@@ -8,13 +8,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aure.androidtuner.model.TileInteractionBehavior
 import com.aure.androidtuner.ui.CompactTunerScreen
 import com.aure.androidtuner.ui.TunerViewModel
+import com.aure.androidtuner.ui.theme.AndroidTunerTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -76,7 +76,8 @@ class TileControlActivity : ComponentActivity() {
 
     private fun setEditorContent() {
         setContent {
-            MaterialTheme {
+            val settings = viewModel.settings.collectAsStateWithLifecycle().value
+            AndroidTunerTheme(settings = settings) {
                 Surface {
                     val state = viewModel.state.collectAsStateWithLifecycle().value
                     CompactTunerScreen(
@@ -95,6 +96,14 @@ class TileControlActivity : ComponentActivity() {
                         onMovePreset = viewModel::moveProfile,
                         onResetProfiles = viewModel::resetProfilesToDefault,
                         onDismissRequest = ::finish,
+                        onOpenFullApp = {
+                            startActivity(
+                                Intent(this, MainActivity::class.java).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                },
+                            )
+                            finish()
+                        },
                     )
                 }
             }

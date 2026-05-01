@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "socModel": "CQ8725S",
+  "profiles": [
+    {
+      "id": "bundled_cq8725s_small",
+      "name": "Small Underclock",
+      "maxFrequencies": {
+        "0": 2745600,
+        "6": 3072000
+      }
+    },
+    {
+      "id": "bundled_cq8725s_medium",
+      "name": "Medium Underclock",
+      "maxFrequencies": {
+        "0": 2227200,
+        "6": 2246400
+      }
+    },
+    {
+      "id": "bundled_cq8725s_large",
+      "name": "Large Underclock",
+      "maxFrequencies": {
+        "0": 1785600,
+        "6": 1958400
+      }
+    }
+  ]
+}

@@ -3,8 +3,10 @@ package com.aure.androidtuner.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.aure.androidtuner.model.AppColorSource
 import com.aure.androidtuner.model.AppSettings
 import com.aure.androidtuner.model.TileInteractionBehavior
 import kotlinx.coroutines.flow.Flow
@@ -17,9 +19,15 @@ class SettingsStorage(private val context: Context) {
     private val tileTapBehaviorKey = stringPreferencesKey("tile_tap_behavior")
     private val tileLongPressBehaviorKey = stringPreferencesKey("tile_long_press_behavior")
     private val applyLastPresetOnBootKey = booleanPreferencesKey("apply_last_preset_on_boot")
+    private val colorSourceKey = stringPreferencesKey("color_source")
+    private val accentColorKey = intPreferencesKey("accent_color")
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { preferences ->
         AppSettings(
+            colorSource = preferences[colorSourceKey]
+                ?.let(::parseColorSource)
+                ?: AppColorSource.SYSTEM,
+            accentColor = preferences[accentColorKey] ?: 0xFF3F51B5.toInt(),
             tileTapBehavior = preferences[tileTapBehaviorKey]
                 ?.let(::parseBehavior)
                 ?: TileInteractionBehavior.SHOW_DIALOG,
@@ -48,8 +56,25 @@ class SettingsStorage(private val context: Context) {
         }
     }
 
+    suspend fun persistColorSource(colorSource: AppColorSource) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[colorSourceKey] = colorSource.name
+        }
+    }
+
+    suspend fun persistAccentColor(accentColor: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[accentColorKey] = accentColor
+        }
+    }
+
     private fun parseBehavior(raw: String): TileInteractionBehavior {
         return runCatching { TileInteractionBehavior.valueOf(raw) }
             .getOrDefault(TileInteractionBehavior.SHOW_DIALOG)
+    }
+
+    private fun parseColorSource(raw: String): AppColorSource {
+        return runCatching { AppColorSource.valueOf(raw) }
+            .getOrDefault(AppColorSource.SYSTEM)
     }
 }

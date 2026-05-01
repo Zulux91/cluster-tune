@@ -30,20 +30,20 @@ class PerformanceCommandBuilderTest {
     )
 
     @Test
-    fun `builds underclock script with service stop`() {
+    fun `builds underclock script without service stop`() {
         val script = builder.buildApplyScript(
             policies = policies,
             selectedValues = mapOf(0 to 2_745_600, 6 to 3_072_000),
             isReset = false,
         )
 
-        assertTrue(script.contains("stop perfd"))
+        assertTrue(!script.contains("stop "))
         assertTrue(script.contains("echo 2745600 > /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"))
         assertTrue(script.contains("chmod 444 /sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq"))
     }
 
     @Test
-    fun `builds reset script with service restart`() {
+    fun `builds reset script without service restart`() {
         val script = builder.buildApplyScript(
             policies = policies,
             selectedValues = mapOf(0 to 3_532_800, 6 to 4_320_000),
@@ -51,7 +51,7 @@ class PerformanceCommandBuilderTest {
         )
 
         assertTrue(script.contains("chmod 644 /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"))
-        assertTrue(script.contains("start vendor.perf-hal-1-0"))
+        assertTrue(!script.contains("start "))
         assertTrue(!script.contains("stop perfd"))
     }
 }
