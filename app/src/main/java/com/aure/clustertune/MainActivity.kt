@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.aure.clustertune.tile.QuickSettingsTileAddResult
 import com.aure.clustertune.tile.QuickSettingsTilePrompt
+import com.aure.clustertune.tile.QuickSettingsTileRefresher
 import com.aure.clustertune.ui.MainTunerScreen
 import com.aure.clustertune.ui.SettingsScreen
 import com.aure.clustertune.ui.TunerViewModel
@@ -82,7 +83,11 @@ class MainActivity : ComponentActivity() {
                         MainTunerScreen(
                             state = state,
                             onApplyProfile = viewModel::applyProfile,
-                            onApplyCurrent = { tunerState -> viewModel.applyCurrent(tunerState) },
+                            onApplyCurrent = { tunerState ->
+                                viewModel.applyCurrent(tunerState) {
+                                    QuickSettingsTileRefresher.requestUpdate(this@MainActivity)
+                                }
+                            },
                             onCreateProfile = viewModel::createUserProfile,
                             onUpdateProfile = viewModel::updateProfile,
                             onDeleteProfile = viewModel::deleteProfile,
@@ -90,6 +95,8 @@ class MainActivity : ComponentActivity() {
                             onOpenSettings = { showSettings = true },
                             onRefreshLiveValues = viewModel::refreshLiveState,
                             onRefreshStructure = viewModel::refreshStructureState,
+                            onStatusMessageShown = viewModel::consumeStatusMessage,
+                            onErrorMessageShown = viewModel::consumeErrorMessage,
                         )
                     }
                 }
