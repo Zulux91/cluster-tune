@@ -1,15 +1,15 @@
-package com.aure.androidtuner
+package com.aure.clustertune
 
 import android.content.Context
-import com.aure.androidtuner.data.BundledPresetProvider
-import com.aure.androidtuner.data.BootIdReader
-import com.aure.androidtuner.data.CpuPolicyDetector
-import com.aure.androidtuner.data.PerformanceRepository
-import com.aure.androidtuner.data.ProfileStorage
-import com.aure.androidtuner.data.SettingsStorage
-import com.aure.androidtuner.root.PerformanceCommandBuilder
-import com.aure.androidtuner.root.PServerSysfsReader
-import com.aure.androidtuner.root.RootCommandRunner
+import com.aure.clustertune.data.BundledProfileProvider
+import com.aure.clustertune.data.BootIdReader
+import com.aure.clustertune.data.CpuPolicyDetector
+import com.aure.clustertune.data.PerformanceRepository
+import com.aure.clustertune.data.ProfileStorage
+import com.aure.clustertune.data.SettingsStorage
+import com.aure.clustertune.root.PerformanceCommandBuilder
+import com.aure.clustertune.root.PServerSysfsReader
+import com.aure.clustertune.root.RootCommandRunner
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -24,7 +24,7 @@ class AppContainer(context: Context) {
                 privilegedReader = PServerSysfsReader(appContext),
             ),
             bootIdReader = BootIdReader(),
-            bundledPresetProvider = BundledPresetProvider(appContext),
+            bundledProfileProvider = BundledProfileProvider(appContext),
             profileStorage = ProfileStorage(appContext),
             commandBuilder = PerformanceCommandBuilder(),
             rootCommandRunner = RootCommandRunner(appContext),
