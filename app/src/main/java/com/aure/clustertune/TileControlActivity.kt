@@ -27,7 +27,7 @@ class TileControlActivity : ComponentActivity() {
         fun createDialogIntent(context: Context): Intent {
             return Intent(context, TileControlActivity::class.java).apply {
                 action = ACTION_OPEN_DIALOG
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
             }
         }
     }
@@ -97,7 +97,7 @@ class TileControlActivity : ComponentActivity() {
                                 Toast.makeText(applicationContext, "Applied $profileName", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        onDismissRequest = ::finish,
+                        onDismissRequest = ::dismissTileDialog,
                         onOpenFullApp = {
                             openFullApp()
                         },
@@ -114,5 +114,9 @@ class TileControlActivity : ComponentActivity() {
             },
         )
         finish()
+    }
+
+    private fun dismissTileDialog() {
+        finishAndRemoveTask()
     }
 }
