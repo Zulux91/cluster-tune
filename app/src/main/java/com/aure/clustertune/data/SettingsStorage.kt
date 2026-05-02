@@ -1,4 +1,4 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -6,9 +6,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.aure.androidtuner.model.AppColorSource
-import com.aure.androidtuner.model.AppSettings
-import com.aure.androidtuner.model.TileInteractionBehavior
+import com.aure.clustertune.model.AppColorSource
+import com.aure.clustertune.model.AppSettings
+import com.aure.clustertune.model.TileInteractionBehavior
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -18,7 +18,9 @@ class SettingsStorage(private val context: Context) {
 
     private val tileTapBehaviorKey = stringPreferencesKey("tile_tap_behavior")
     private val tileLongPressBehaviorKey = stringPreferencesKey("tile_long_press_behavior")
-    private val applyLastPresetOnBootKey = booleanPreferencesKey("apply_last_preset_on_boot")
+    private val applyLastProfileOnBootKey = booleanPreferencesKey("apply_last_profile_on_boot")
+    private val quickSettingsTilePromptShownKey = booleanPreferencesKey("quick_settings_tile_prompt_shown")
+    private val quickSettingsTileAddedKey = booleanPreferencesKey("quick_settings_tile_added")
     private val colorSourceKey = stringPreferencesKey("color_source")
     private val accentColorKey = intPreferencesKey("accent_color")
 
@@ -34,7 +36,9 @@ class SettingsStorage(private val context: Context) {
             tileLongPressBehavior = preferences[tileLongPressBehaviorKey]
                 ?.let(::parseBehavior)
                 ?: TileInteractionBehavior.SHOW_DIALOG,
-            applyLastPresetOnBoot = preferences[applyLastPresetOnBootKey] ?: false,
+            applyLastProfileOnBoot = preferences[applyLastProfileOnBootKey] ?: false,
+            hasPromptedQuickSettingsTile = preferences[quickSettingsTilePromptShownKey] ?: false,
+            isQuickSettingsTileAdded = preferences[quickSettingsTileAddedKey] ?: false,
         )
     }
 
@@ -50,9 +54,21 @@ class SettingsStorage(private val context: Context) {
         }
     }
 
-    suspend fun persistApplyLastPresetOnBoot(enabled: Boolean) {
+    suspend fun persistApplyLastProfileOnBoot(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[applyLastPresetOnBootKey] = enabled
+            preferences[applyLastProfileOnBootKey] = enabled
+        }
+    }
+
+    suspend fun persistQuickSettingsTilePromptShown() {
+        context.settingsDataStore.edit { preferences ->
+            preferences[quickSettingsTilePromptShownKey] = true
+        }
+    }
+
+    suspend fun persistQuickSettingsTileAdded(isAdded: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[quickSettingsTileAddedKey] = isAdded
         }
     }
 

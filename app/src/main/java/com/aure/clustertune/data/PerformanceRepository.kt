@@ -1,19 +1,22 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
-import com.aure.androidtuner.model.CpuPolicyInfo
-import com.aure.androidtuner.model.PerformanceProfile
-import com.aure.androidtuner.model.PresetStateResolver
-import com.aure.androidtuner.model.ProfileSource
-import com.aure.androidtuner.model.TunerState
-import com.aure.androidtuner.root.PerformanceCommandBuilder
-import com.aure.androidtuner.root.RootCommandRunner
+import com.aure.clustertune.model.CpuPolicyInfo
+import com.aure.clustertune.model.PerformanceProfile
+import com.aure.clustertune.model.ProfileStateResolver
+import com.aure.clustertune.model.ProfileSource
+import com.aure.clustertune.model.TunerState
+import com.aure.clustertune.root.PerformanceCommandBuilder
+import com.aure.clustertune.root.RootCommandRunner
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 private data class StorageState(
@@ -52,7 +55,7 @@ private data class StockBootstrapResult(
 class PerformanceRepository(
     private val detector: CpuPolicyDetector,
     private val bootIdReader: BootIdReader,
-    private val bundledPresetProvider: BundledPresetProvider,
+    private val bundledProfileProvider: BundledProfileProvider,
     private val profileStorage: ProfileStorage,
     private val commandBuilder: PerformanceCommandBuilder,
     private val rootCommandRunner: RootCommandRunner,
@@ -65,6 +68,7 @@ class PerformanceRepository(
 
     private val structureRefreshToken = MutableStateFlow(0)
     private val liveRefreshToken = MutableStateFlow(0)
+    private val stockCaptureMutex = Mutex()
     private var stockCaptureState = StockCaptureState()
     private var cachedPolicies: List<CpuPolicyInfo> = emptyList()
     private var cachedStructureVersion = Int.MIN_VALUE
@@ -133,7 +137,7 @@ class PerformanceRepository(
                     profileStorage.persistInitialStockValues(stockBootstrap.completedValues)
                     profileStorage.persistStockBootId(currentBootId)
                 }
-                val defaultBundledProfiles = bundledPresetProvider.createProfiles(policies)
+                val defaultBundledProfiles = bundledProfileProvider.createProfiles(policies)
                 val storedById = storage.storedProfiles.associateBy { it.id }
                 val knownBundledIds = defaultBundledProfiles.map { it.id }.toSet()
                 val bundledProfiles = defaultBundledProfiles.mapIndexed { index, profile ->
@@ -167,7 +171,7 @@ class PerformanceRepository(
                 val defaultValues = policies.associate { it.id to it.currentMaxFreq }
                 val stockValues = stockBootstrap.completedValues.orEmpty()
                 val stockProfile = if (stockBootstrap.isReadyForBoot) {
-                    PresetStateResolver.buildStockProfile(
+                    ProfileStateResolver.buildStockProfile(
                         policies = policies,
                         stockValues = stockValues,
                     )
@@ -175,7 +179,7 @@ class PerformanceRepository(
                     null
                 }
                 emit(
-                    PresetStateResolver.resolve(
+                    ProfileStateResolver.resolve(
                         TunerState(
                             isLoading = false,
                             isPServerAvailable = rootCommandRunner.isAvailable,
@@ -190,7 +194,7 @@ class PerformanceRepository(
                             selectedProfileId = storage.selectedProfileId?.takeIf { id ->
                                 orderedRealProfiles.any { it.id == id }
                             },
-                            displayProfiles = PresetStateResolver.buildDisplayProfiles(
+                            displayProfiles = ProfileStateResolver.buildDisplayProfiles(
                                 realProfiles = orderedRealProfiles,
                                 stockProfile = stockProfile,
                                 orderedIds = storage.displayOrder,
@@ -207,6 +211,9 @@ class PerformanceRepository(
         isReset: Boolean,
         appliedDisplayProfileId: String?,
     ): Result<ApplyOutcome> {
+        ensureStockValuesCapturedForCurrentBoot().onFailure { throwable ->
+            return Result.failure(throwable)
+        }
         val filtered = selectedValues.filterKeys { policyId -> policies.any { it.id == policyId } }
         val script = commandBuilder.buildApplyScript(policies, filtered, isReset)
         return rootCommandRunner.executeScript(script).mapCatching { output ->
@@ -228,16 +235,19 @@ class PerformanceRepository(
         if (!rootCommandRunner.isAvailable) {
             return Result.failure(IllegalStateException("PServer not available"))
         }
+        ensureStockValuesCapturedForCurrentBoot().onFailure { throwable ->
+            return Result.failure(throwable)
+        }
         val policies = detector.detectPolicies()
         if (policies.isEmpty()) {
-            return Result.failure(IllegalStateException("No CPU policies found"))
+            return Result.failure(IllegalStateException("No CPU clusters found"))
         }
         val persistedValues = profileStorage.lastValues.first()
         if (persistedValues.isEmpty()) {
             return Result.failure(IllegalStateException("No stored values to apply"))
         }
         val lastAppliedDisplayProfileId = profileStorage.lastAppliedDisplayProfileId.first()
-        if (lastAppliedDisplayProfileId == PresetStateResolver.STOCK_PROFILE_ID) {
+        if (lastAppliedDisplayProfileId == ProfileStateResolver.STOCK_PROFILE_ID) {
             return Result.failure(IllegalStateException("Boot apply skipped: stock is active"))
         }
         val filteredValues = persistedValues.filterKeys { policyId ->
@@ -254,7 +264,7 @@ class PerformanceRepository(
         )
     }
 
-    suspend fun cycleTilePreset(): Result<PerformanceProfile> {
+    suspend fun cycleTileProfile(): Result<PerformanceProfile> {
         val state = observeState().first()
         if (!state.isPServerAvailable || state.policies.isEmpty()) {
             return Result.failure(IllegalStateException("Tile controls are unavailable"))
@@ -262,12 +272,12 @@ class PerformanceRepository(
 
         val cycleProfiles = state.bundledProfiles + listOfNotNull(state.stockProfile)
         if (cycleProfiles.isEmpty()) {
-            return Result.failure(IllegalStateException("No presets available for tile cycling"))
+            return Result.failure(IllegalStateException("No profiles available for tile cycling"))
         }
 
         val currentIndex = cycleProfiles.indexOfFirst { it.id == state.activeDisplayProfileId }
         val nextProfile = if (currentIndex == -1) {
-            cycleProfiles.lastOrNull { it.id == PresetStateResolver.STOCK_PROFILE_ID } ?: cycleProfiles.first()
+            cycleProfiles.lastOrNull { it.id == ProfileStateResolver.STOCK_PROFILE_ID } ?: cycleProfiles.first()
         } else {
             cycleProfiles[(currentIndex + 1) % cycleProfiles.size]
         }
@@ -275,15 +285,15 @@ class PerformanceRepository(
         return applyValues(
             policies = state.policies,
             selectedValues = nextProfile.maxFrequencies,
-            isReset = nextProfile.id == PresetStateResolver.STOCK_PROFILE_ID,
+            isReset = nextProfile.id == ProfileStateResolver.STOCK_PROFILE_ID,
             appliedDisplayProfileId = nextProfile.id,
         ).map {
-            selectProfile(nextProfile.id.takeUnless { id -> id == PresetStateResolver.STOCK_PROFILE_ID })
+            selectProfile(nextProfile.id.takeUnless { id -> id == ProfileStateResolver.STOCK_PROFILE_ID })
             nextProfile
         }
     }
 
-    suspend fun createUserPreset(name: String, values: Map<Int, Int>) {
+    suspend fun createUserProfile(name: String, values: Map<Int, Int>) {
         val currentProfiles = realProfiles()
         profileStorage.saveProfile(
             PerformanceProfile(
@@ -306,9 +316,9 @@ class PerformanceRepository(
                     isDeletable = true,
                 )
             }
-        return PresetJsonCodec.encodeShareFile(
+        return ProfileJsonCodec.encodeShareFile(
             profiles = profiles,
-            socModel = bundledPresetProvider.currentSocModel(),
+            socModel = bundledProfileProvider.currentSocModel(),
         )
     }
 
@@ -319,7 +329,7 @@ class PerformanceRepository(
         val bundledProfilesById = currentProfiles
             .filter { it.source == ProfileSource.BUNDLED }
             .associateBy { it.id }
-        val validProfiles = PresetJsonCodec.parseProfiles(rawJson)
+        val validProfiles = ProfileJsonCodec.parseShareProfiles(rawJson)
             .filter { profile ->
                 profile.maxFrequencies.isNotEmpty() &&
                     profile.maxFrequencies.all { (policyId, frequency) ->
@@ -440,6 +450,50 @@ class PerformanceRepository(
         return state.displayProfiles.filter { it.source != ProfileSource.VIRTUAL }
     }
 
+    private suspend fun ensureStockValuesCapturedForCurrentBoot(): Result<Unit> = stockCaptureMutex.withLock {
+        val bootId = bootIdReader.currentBootId()
+        val storedBootId = profileStorage.stockBootId.first()
+        val storedValues = profileStorage.initialStockValues.first()
+        if (storedBootId == bootId && storedValues.isNotEmpty()) {
+            return Result.success(Unit)
+        }
+
+        var previousValues: Map<Int, Int>? = null
+        var consecutiveEqualReads = 0
+        repeat(MAX_STOCK_READ_ATTEMPTS) { attempt ->
+            val policies = detector.detectPolicies()
+            val detectedValues = policies.associate { policy -> policy.id to policy.currentMaxFreq }
+            if (detectedValues.isNotEmpty()) {
+                consecutiveEqualReads = if (detectedValues == previousValues) {
+                    consecutiveEqualReads + 1
+                } else {
+                    1
+                }
+                previousValues = detectedValues
+
+                if (consecutiveEqualReads >= REQUIRED_STABLE_READS) {
+                    profileStorage.persistInitialStockValues(detectedValues)
+                    profileStorage.persistStockBootId(bootId)
+                    stockCaptureState = StockCaptureState(
+                        bootId = bootId,
+                        lastRead = detectedValues,
+                        consecutiveEqualReads = consecutiveEqualReads,
+                        attempts = attempt + 1,
+                    )
+                    cachedPolicies = policies
+                    refreshStructure()
+                    return Result.success(Unit)
+                }
+            }
+
+            if (attempt < MAX_STOCK_READ_ATTEMPTS - 1) {
+                delay(STOCK_READ_INTERVAL_MS)
+            }
+        }
+
+        Result.failure(IllegalStateException("Unable to read stable stock values"))
+    }
+
     private fun resolveStockBootstrap(
         bootId: String,
         detectedValues: Map<Int, Int>,
@@ -512,5 +566,6 @@ class PerformanceRepository(
     private companion object {
         const val REQUIRED_STABLE_READS = 3
         const val MAX_STOCK_READ_ATTEMPTS = 10
+        const val STOCK_READ_INTERVAL_MS = 1_000L
     }
 }

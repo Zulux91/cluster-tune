@@ -1,4 +1,4 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
 import java.io.File
 

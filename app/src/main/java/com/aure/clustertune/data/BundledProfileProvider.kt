@@ -1,9 +1,9 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
 import android.content.Context
-import com.aure.androidtuner.model.CpuPolicyInfo
-import com.aure.androidtuner.model.PerformanceProfile
-import com.aure.androidtuner.model.ProfileSource
+import com.aure.clustertune.model.CpuPolicyInfo
+import com.aure.clustertune.model.PerformanceProfile
+import com.aure.clustertune.model.ProfileSource
 
 private fun String.sanitizeAssetFileName(): String {
     return filter { character ->
@@ -11,36 +11,38 @@ private fun String.sanitizeAssetFileName(): String {
     }
 }
 
-private fun assetPresetReader(context: Context): (String) -> String? {
+private fun assetProfileReader(context: Context): (String) -> String? {
     val appContext = context.applicationContext
     return { socModel ->
-        val fileName = "bundled_presets/${socModel.sanitizeAssetFileName()}.json"
+        val fileName = "bundled_profiles/${socModel.sanitizeAssetFileName()}.json"
         runCatching {
             appContext.assets.open(fileName).bufferedReader().use { it.readText() }
         }.getOrNull()
     }
 }
 
-class BundledPresetProvider(
-    private val readPresetJson: (String) -> String?,
-    private val parsePresetProfiles: (String) -> List<PerformanceProfile> = PresetJsonCodec::parseProfiles,
+class BundledProfileProvider(
+    private val readProfileJson: (String) -> String?,
+    private val parseProfiles: (String) -> List<PerformanceProfile> = ProfileJsonCodec::parseShareProfiles,
     private val socDetector: SocDetector = SocDetector(),
 ) {
+    private var cachedSocModel: String? = null
+    private var cachedProfiles: List<PerformanceProfile> = emptyList()
     constructor(
         context: Context,
         socDetector: SocDetector = SocDetector(),
     ) : this(
-        readPresetJson = assetPresetReader(context),
-        parsePresetProfiles = PresetJsonCodec::parseProfiles,
+        readProfileJson = assetProfileReader(context),
+        parseProfiles = ProfileJsonCodec::parseShareProfiles,
         socDetector = socDetector,
     )
 
     fun createProfiles(policies: List<CpuPolicyInfo>): List<PerformanceProfile> {
         val socModel = socDetector.detectSocModel() ?: return emptyList()
-        val rawJson = readPresetJson(socModel) ?: return emptyList()
+        val bundledProfiles = profilesForSoc(socModel)
         val policyIds = policies.associateBy { it.id }
 
-        return parsePresetProfiles(rawJson)
+        return bundledProfiles
             .mapIndexed { index, profile ->
                 profile.copy(
                     source = ProfileSource.BUNDLED,
@@ -59,4 +61,14 @@ class BundledPresetProvider(
     }
 
     fun currentSocModel(): String? = socDetector.detectSocModel()
+
+    private fun profilesForSoc(socModel: String): List<PerformanceProfile> {
+        if (cachedSocModel == socModel) return cachedProfiles
+        val profiles = readProfileJson(socModel)
+            ?.let(parseProfiles)
+            .orEmpty()
+        cachedSocModel = socModel
+        cachedProfiles = profiles
+        return profiles
+    }
 }
