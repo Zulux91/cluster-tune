@@ -1,10 +1,11 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.AndroidTuner" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.ClusterTune" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor" tools:targetApi="l">@android:color/transparent</item>
-        <item name="android:navigationBarColor">?android:attr/colorBackground</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
     </style>
 
-    <style name="Theme.AndroidTuner.TileDialog" parent="Theme.AndroidTuner">
+    <style name="Theme.ClusterTune.TileDialog" parent="Theme.ClusterTune">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">true</item>
