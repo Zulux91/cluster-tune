@@ -1,4 +1,4 @@
-package com.aure.androidtuner
+package com.aure.clustertune
 
 import android.net.Uri
 import android.os.Bundle
@@ -15,10 +15,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.aure.androidtuner.ui.MainTunerScreen
-import com.aure.androidtuner.ui.SettingsScreen
-import com.aure.androidtuner.ui.TunerViewModel
-import com.aure.androidtuner.ui.theme.AndroidTunerTheme
+import com.aure.clustertune.tile.QuickSettingsTileAddResult
+import com.aure.clustertune.tile.QuickSettingsTilePrompt
+import com.aure.clustertune.ui.MainTunerScreen
+import com.aure.clustertune.ui.SettingsScreen
+import com.aure.clustertune.ui.TunerViewModel
+import com.aure.clustertune.ui.theme.ClusterTuneTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -30,24 +33,25 @@ class MainActivity : ComponentActivity() {
             settingsStorage = container.settingsStorage,
         )
     }
-    private val exportPresetsLauncher = registerForActivityResult(
+    private val exportProfilesLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
-        uri?.let(::exportPresetsToUri)
+        uri?.let(::exportProfilesToUri)
     }
-    private val importPresetsLauncher = registerForActivityResult(
+    private val importProfilesLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        uri?.let(::importPresetsFromUri)
+        uri?.let(::importProfilesFromUri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        maybeRequestQuickSettingsTileOnFirstRun()
 
         setContent {
             val settings = viewModel.settings.collectAsStateWithLifecycle().value
-            AndroidTunerTheme(settings = settings) {
+            ClusterTuneTheme(settings = settings) {
                 Surface {
                     val state = viewModel.state.collectAsStateWithLifecycle().value
                     var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -60,27 +64,29 @@ class MainActivity : ComponentActivity() {
                             onAccentColorChange = viewModel::setAccentColor,
                             onTileTapBehaviorChange = viewModel::setTileTapBehavior,
                             onTileLongPressBehaviorChange = viewModel::setTileLongPressBehavior,
-                            onApplyLastPresetOnBootChange = viewModel::setApplyLastPresetOnBoot,
+                            onApplyLastProfileOnBootChange = viewModel::setApplyLastProfileOnBoot,
                             onResetProfiles = viewModel::resetProfilesToDefault,
-                            onExportPresets = {
-                                exportPresetsLauncher.launch("android-tuner-presets.json")
+                            onExportProfiles = {
+                                exportProfilesLauncher.launch("clustertune-profiles.json")
                             },
-                            onImportPresets = {
-                                importPresetsLauncher.launch(arrayOf("application/json", "text/*"))
+                            onImportProfiles = {
+                                importProfilesLauncher.launch(arrayOf("application/json", "text/*"))
                             },
+                            onRequestAddQuickSettingsTile = {
+                                requestQuickSettingsTile(showResultToast = true)
+                            },
+                            canRequestAddQuickSettingsTile = QuickSettingsTilePrompt.isSupported,
+                            isQuickSettingsTileAdded = settings.isQuickSettingsTileAdded,
                         )
                     } else {
                         MainTunerScreen(
                             state = state,
-                            onPolicyValueChange = viewModel::setPolicyValue,
                             onApplyProfile = viewModel::applyProfile,
-                            onClearSelection = viewModel::clearSelection,
                             onApplyCurrent = { tunerState -> viewModel.applyCurrent(tunerState) },
-                            onCreatePreset = viewModel::createUserPreset,
-                            onUpdatePreset = viewModel::updateProfile,
-                            onDeletePreset = viewModel::deletePreset,
-                            onMovePreset = viewModel::moveProfile,
-                            onResetProfiles = viewModel::resetProfilesToDefault,
+                            onCreateProfile = viewModel::createUserProfile,
+                            onUpdateProfile = viewModel::updateProfile,
+                            onDeleteProfile = viewModel::deleteProfile,
+                            onMoveProfile = viewModel::moveProfile,
                             onOpenSettings = { showSettings = true },
                             onRefreshLiveValues = viewModel::refreshLiveState,
                             onRefreshStructure = viewModel::refreshStructureState,
@@ -91,7 +97,35 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun exportPresetsToUri(uri: Uri) {
+    private fun maybeRequestQuickSettingsTileOnFirstRun() {
+        lifecycleScope.launch {
+            val settings = container.settingsStorage.settings.first()
+            if (settings.hasPromptedQuickSettingsTile) return@launch
+
+            container.settingsStorage.persistQuickSettingsTilePromptShown()
+            if (QuickSettingsTilePrompt.isSupported) {
+                requestQuickSettingsTile(showResultToast = false)
+            }
+        }
+    }
+
+    private fun requestQuickSettingsTile(showResultToast: Boolean) {
+        QuickSettingsTilePrompt.request(this) { result ->
+            if (result == QuickSettingsTileAddResult.ADDED || result == QuickSettingsTileAddResult.ALREADY_ADDED) {
+                lifecycleScope.launch {
+                    container.settingsStorage.persistQuickSettingsTileAdded(true)
+                }
+            }
+            if (!showResultToast) return@request
+            Toast.makeText(
+                applicationContext,
+                result.toToastMessage(),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    private fun exportProfilesToUri(uri: Uri) {
         lifecycleScope.launch {
             runCatching {
                 val json = viewModel.exportProfilesJson()
@@ -99,18 +133,18 @@ class MainActivity : ComponentActivity() {
                     outputStream.write(json.toByteArray())
                 } ?: error("Unable to open export file")
             }.onSuccess {
-                Toast.makeText(applicationContext, "Exported presets", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Exported profiles", Toast.LENGTH_SHORT).show()
             }.onFailure { throwable ->
                 Toast.makeText(
                     applicationContext,
-                    throwable.message ?: "Failed to export presets",
+                    throwable.message ?: "Failed to export profiles",
                     Toast.LENGTH_LONG,
                 ).show()
             }
         }
     }
 
-    private fun importPresetsFromUri(uri: Uri) {
+    private fun importProfilesFromUri(uri: Uri) {
         lifecycleScope.launch {
             runCatching {
                 val json = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
@@ -119,16 +153,26 @@ class MainActivity : ComponentActivity() {
             }.onSuccess { importedCount ->
                 Toast.makeText(
                     applicationContext,
-                    "Imported $importedCount presets",
+                    "Imported $importedCount profiles",
                     Toast.LENGTH_SHORT,
                 ).show()
             }.onFailure { throwable ->
                 Toast.makeText(
                     applicationContext,
-                    throwable.message ?: "Failed to import presets",
+                    throwable.message ?: "Failed to import profiles",
                     Toast.LENGTH_LONG,
                 ).show()
             }
+        }
+    }
+
+    private fun QuickSettingsTileAddResult.toToastMessage(): String {
+        return when (this) {
+            QuickSettingsTileAddResult.ADDED -> "Quick Settings tile added"
+            QuickSettingsTileAddResult.ALREADY_ADDED -> "Quick Settings tile is already added"
+            QuickSettingsTileAddResult.NOT_ADDED -> "Quick Settings tile was not added"
+            QuickSettingsTileAddResult.UNAVAILABLE -> "Quick Settings tile prompt is unavailable on this device"
+            QuickSettingsTileAddResult.ERROR -> "Failed to request Quick Settings tile"
         }
     }
 }
