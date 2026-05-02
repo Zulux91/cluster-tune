@@ -1,9 +1,8 @@
-package com.aure.androidtuner.root
+package com.aure.clustertune.root
 
-import com.aure.androidtuner.model.CpuPolicyInfo
+import com.aure.clustertune.model.CpuPolicyInfo
 
-class PerformanceCommandBuilder(
-) {
+class PerformanceCommandBuilder {
 
     fun buildApplyScript(
         policies: List<CpuPolicyInfo>,
