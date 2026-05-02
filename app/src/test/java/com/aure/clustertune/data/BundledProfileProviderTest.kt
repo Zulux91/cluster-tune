@@ -1,13 +1,13 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
-import com.aure.androidtuner.model.CpuPolicyInfo
-import com.aure.androidtuner.model.PerformanceProfile
-import com.aure.androidtuner.model.ProfileSource
+import com.aure.clustertune.model.CpuPolicyInfo
+import com.aure.clustertune.model.PerformanceProfile
+import com.aure.clustertune.model.ProfileSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class BundledPresetProviderTest {
+class BundledProfileProviderTest {
 
     private val cq8725sJson = """
         {
@@ -42,20 +42,20 @@ class BundledPresetProviderTest {
         }
     """.trimIndent()
 
-    private val provider = BundledPresetProvider(
-        readPresetJson = { socModel ->
+    private val provider = BundledProfileProvider(
+        readProfileJson = { socModel ->
             if (socModel == "CQ8725S") {
                 cq8725sJson
             } else {
                 null
             }
         },
-        parsePresetProfiles = { cq8725sProfiles },
+        parseProfiles = { cq8725sProfiles },
         socDetector = fakeSocDetector("CQ8725S"),
     )
 
     @Test
-    fun `returns soc presets when matching asset exists and policy0 and policy6 are present`() {
+    fun `returns soc profiles when matching asset exists and policy0 and policy6 are present`() {
         val profiles = provider.createProfiles(
             listOf(
                 policy(id = 0, stockMax = 3_532_800, supported = listOf(1_785_600, 2_227_200, 2_745_600, 3_532_800)),
@@ -75,9 +75,9 @@ class BundledPresetProviderTest {
 
     @Test
     fun `returns empty when no matching soc asset exists`() {
-        val profiles = BundledPresetProvider(
-            readPresetJson = { null },
-            parsePresetProfiles = { cq8725sProfiles },
+        val profiles = BundledProfileProvider(
+            readProfileJson = { null },
+            parseProfiles = { cq8725sProfiles },
             socDetector = fakeSocDetector("QCS8550"),
         ).createProfiles(
             listOf(

@@ -1,19 +1,19 @@
-package com.aure.androidtuner.model
+package com.aure.clustertune.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class PresetStateResolverTest {
+class ProfileStateResolverTest {
 
     @Test
-    fun `resolves stock as virtual preset`() {
+    fun `resolves stock as virtual profile`() {
         val policies = listOf(
             policy(id = 0, current = 3_532_800, stock = 3_532_800, supported = listOf(1_785_600, 3_532_800)),
             policy(id = 6, current = 4_320_000, stock = 4_320_000, supported = listOf(1_958_400, 4_320_000)),
         )
 
-        val state = PresetStateResolver.resolve(
+        val state = ProfileStateResolver.resolve(
             TunerState(
                 isLoading = false,
                 policies = policies,
@@ -23,18 +23,18 @@ class PresetStateResolverTest {
             ),
         )
 
-        assertEquals(PresetStateResolver.STOCK_PROFILE_ID, state.activeDisplayProfileId)
+        assertEquals(ProfileStateResolver.STOCK_PROFILE_ID, state.activeDisplayProfileId)
         assertEquals("Stock", state.activeDisplayProfileName)
-        assertEquals(PresetStateResolver.STOCK_PROFILE_ID, state.selectedDisplayProfileId)
+        assertEquals(ProfileStateResolver.STOCK_PROFILE_ID, state.selectedDisplayProfileId)
     }
 
     @Test
-    fun `resolves manual when values do not match a preset`() {
+    fun `resolves manual when values do not match a profile`() {
         val policies = listOf(
             policy(id = 0, current = 2_500_000, stock = 3_532_800, supported = listOf(1_785_600, 2_500_000, 3_532_800)),
         )
 
-        val state = PresetStateResolver.resolve(
+        val state = ProfileStateResolver.resolve(
             TunerState(
                 isLoading = false,
                 policies = policies,

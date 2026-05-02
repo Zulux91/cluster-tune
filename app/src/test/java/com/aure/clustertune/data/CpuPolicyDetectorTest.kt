@@ -1,4 +1,4 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,10 +18,12 @@ class CpuPolicyDetectorTest {
                 "/sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq" to "3532800",
                 "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq" to "998400",
                 "/sys/devices/system/cpu/cpufreq/policy0/scaling_available_frequencies" to "998400 1785600 2227200 2745600",
+                "/sys/devices/system/cpu/cpufreq/policy0/affected_cpus" to "0 1 2 3 4 5",
                 "/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq" to "3072000",
                 "/sys/devices/system/cpu/cpufreq/policy6/cpuinfo_max_freq" to "4320000",
                 "/sys/devices/system/cpu/cpufreq/policy6/scaling_min_freq" to "1075200",
                 "/sys/devices/system/cpu/cpufreq/policy6/scaling_available_frequencies" to "1075200 1958400 2246400 3072000",
+                "/sys/devices/system/cpu/cpufreq/policy6/affected_cpus" to "6 7",
             ),
         )
 
@@ -33,6 +35,8 @@ class CpuPolicyDetectorTest {
         val result = detector.detectPolicies()
 
         assertEquals(listOf(0, 6), result.map { it.id })
+        assertEquals(listOf(0, 1, 2, 3, 4, 5), result.first().cpuIds)
+        assertEquals(listOf(6, 7), result.last().cpuIds)
         assertEquals(listOf(998400, 1785600, 2227200, 2745600, 3532800), result.first().supportedFrequencies)
         assertEquals(4320000, result.last().stockMaxFreq)
     }
@@ -218,7 +222,6 @@ class CpuPolicyDetectorTest {
         val files: Map<String, String>,
     ) : SysfsFileSystem {
         override fun listPolicyDirectories(root: String): List<String> = directories
-        override fun readText(path: String): String? = files[path]
     }
 
     private class FakePrivilegedSysfsReader(

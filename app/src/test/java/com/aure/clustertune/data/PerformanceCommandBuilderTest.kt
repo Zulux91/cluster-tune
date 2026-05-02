@@ -1,7 +1,7 @@
-package com.aure.androidtuner.data
+package com.aure.clustertune.data
 
-import com.aure.androidtuner.model.CpuPolicyInfo
-import com.aure.androidtuner.root.PerformanceCommandBuilder
+import com.aure.clustertune.model.CpuPolicyInfo
+import com.aure.clustertune.root.PerformanceCommandBuilder
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
