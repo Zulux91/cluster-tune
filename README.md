@@ -9,6 +9,12 @@ ClusterTune does not require Magisk or user-granted root access. It relies on th
 > [!WARNING]
 > ClusterTune changes CPU frequency limits. This may affect device stability, thermals, battery life, and performance, and I cannot guarantee that it is safe for your hardware or beneficial for your use case. Use it only if you understand what CPU frequency limits do and are comfortable accepting the risk.
 
+## Why use this?
+
+ClusterTune underclocks by setting lower maximum CPU frequencies. It does not undervolt the CPU, and it is not an adaptive governor; it simply caps how fast each CPU cluster is allowed to run.
+
+Lower CPU frequency caps can reduce power draw, which may help lower temperatures, quiet the fan, and extend battery life. In some games, reducing CPU power and heat may also leave more thermal or power headroom for the GPU, especially when the game is GPU-bound.
+
 ## Screenshots
 
 | Main app | Profile editor |
