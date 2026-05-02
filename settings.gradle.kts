@@ -17,5 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "android-tuner"
+rootProject.name = "ClusterTune"
 include(":app")
