@@ -1,9 +1,31 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.isFile) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun signingProperty(name: String): String? {
+    return System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+}
+
+val releaseKeystoreFile = signingProperty("ANDROID_KEYSTORE_FILE")
+val hasReleaseSigningConfig = listOf(
+    releaseKeystoreFile,
+    signingProperty("ANDROID_KEYSTORE_PASSWORD"),
+    signingProperty("ANDROID_KEY_ALIAS"),
+    signingProperty("ANDROID_KEY_PASSWORD"),
+).all { it != null }
 
 android {
     namespace = "com.aure.clustertune"
@@ -22,9 +44,29 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = rootProject.file(releaseKeystoreFile!!)
+                storePassword = signingProperty("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = signingProperty("ANDROID_KEY_ALIAS")
+                keyPassword = signingProperty("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+
         release {
             isMinifyEnabled = false
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
