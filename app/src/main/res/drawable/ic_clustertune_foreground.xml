@@ -1,0 +1,91 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="108dp"
+        android:height="108dp"
+        android:viewportWidth="108"
+        android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.86"
+        android:scaleY="0.86">
+
+    <!-- CPU pins -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="
+        M14,40h10a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2H14a2,2 0 0 1 -2,-2v0a2,2 0 0 1 2,-2z
+        M14,52h10a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2H14a2,2 0 0 1 -2,-2v0a2,2 0 0 1 2,-2z
+        M14,64h10a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2H14a2,2 0 0 1 -2,-2v0a2,2 0 0 1 2,-2z
+
+        M84,40h10a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2H84a2,2 0 0 1 -2,-2v0a2,2 0 0 1 2,-2z
+        M84,52h10a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2H84a2,2 0 0 1 -2,-2v0a2,2 0 0 1 2,-2z
+        M84,64h10a2,2 0 0 1 2,2v0a2,2 0 0 1 -2,2H84a2,2 0 0 1 -2,-2v0a2,2 0 0 1 2,-2z
+
+        M40,14v10a2,2 0 0 0 2,2h0a2,2 0 0 0 2,-2V14a2,2 0 0 0 -2,-2h0a2,2 0 0 0 -2,2z
+        M52,14v10a2,2 0 0 0 2,2h0a2,2 0 0 0 2,-2V14a2,2 0 0 0 -2,-2h0a2,2 0 0 0 -2,2z
+        M64,14v10a2,2 0 0 0 2,2h0a2,2 0 0 0 2,-2V14a2,2 0 0 0 -2,-2h0a2,2 0 0 0 -2,2z
+
+        M40,84v10a2,2 0 0 0 2,2h0a2,2 0 0 0 2,-2V84a2,2 0 0 0 -2,-2h0a2,2 0 0 0 -2,2z
+        M52,84v10a2,2 0 0 0 2,2h0a2,2 0 0 0 2,-2V84a2,2 0 0 0 -2,-2h0a2,2 0 0 0 -2,2z
+        M64,84v10a2,2 0 0 0 2,2h0a2,2 0 0 0 2,-2V84a2,2 0 0 0 -2,-2h0a2,2 0 0 0 -2,2z" />
+
+    <!-- CPU body -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M30,24h48a6,6 0 0 1 6,6v48a6,6 0 0 1 -6,6H30a6,6 0 0 1 -6,-6V30a6,6 0 0 1 6,-6z" />
+
+    <!-- CPU inner panel -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M36,30h36a6,6 0 0 1 6,6v36a6,6 0 0 1 -6,6H36a6,6 0 0 1 -6,-6V36a6,6 0 0 1 6,-6z" />
+
+    <!-- CPU outline -->
+    <path
+        android:pathData="M30,24h48a6,6 0 0 1 6,6v48a6,6 0 0 1 -6,6H30a6,6 0 0 1 -6,-6V30a6,6 0 0 1 6,-6z"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="2" />
+
+    <!-- Slider 1 -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M42,56h4a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2V58a2,2 0 0 1 2,-2z" />
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M42,42h4a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2V44a2,2 0 0 1 2,-2z" />
+    <path
+        android:fillColor="#0F172A"
+        android:strokeColor="#93C5FD"
+        android:strokeWidth="2"
+        android:pathData="M44,57a4,4 0 1 1 0.01,0z" />
+
+    <!-- Slider 2 -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M52,50h4a2,2 0 0 1 2,2v20a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2V52a2,2 0 0 1 2,-2z" />
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M52,36h4a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2V38a2,2 0 0 1 2,-2z" />
+    <path
+        android:fillColor="#0F172A"
+        android:strokeColor="#93C5FD"
+        android:strokeWidth="2"
+        android:pathData="M54,52a4,4 0 1 1 0.01,0z" />
+
+    <!-- Slider 3 -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M62,44h4a2,2 0 0 1 2,2v26a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2V46a2,2 0 0 1 2,-2z" />
+    <path
+        android:fillColor="#A855F7"
+        android:pathData="M62,30h4a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2V32a2,2 0 0 1 2,-2z" />
+    <path
+        android:fillColor="#0F172A"
+        android:strokeColor="#C4B5FD"
+        android:strokeWidth="2"
+        android:pathData="M64,45a4,4 0 1 1 0.01,0z" />
+
+    </group>
+
+    </vector>
