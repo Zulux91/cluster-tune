@@ -18,6 +18,7 @@ data class TunerState(
     val selectedDisplayProfileName: String? = null,
     val activeDisplayProfileId: String? = null,
     val activeDisplayProfileName: String? = null,
+    val lastAppliedDisplayProfileId: String? = null,
     val isManualSelection: Boolean = false,
     val isManualActive: Boolean = false,
     val statusMessage: String? = null,

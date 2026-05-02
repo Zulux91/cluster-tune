@@ -27,6 +27,7 @@ private data class StorageState(
     val initialStockValues: Map<Int, Int>,
     val stockBootId: String?,
     val selectedProfileId: String?,
+    val lastAppliedDisplayProfileId: String?,
 )
 
 private data class PartialStorageState(
@@ -94,7 +95,8 @@ class PerformanceRepository(
             storageState,
             profileStorage.selectedProfileId,
             profileStorage.stockBootId,
-        ) { partial, selectedProfileId, stockBootId ->
+            profileStorage.lastAppliedDisplayProfileId,
+        ) { partial, selectedProfileId, stockBootId, lastAppliedDisplayProfileId ->
             StorageState(
                 storedProfiles = partial.storedProfiles,
                 deletedBundledProfileIds = partial.deletedBundledProfileIds,
@@ -103,6 +105,7 @@ class PerformanceRepository(
                 initialStockValues = partial.initialStockValues,
                 stockBootId = stockBootId,
                 selectedProfileId = selectedProfileId,
+                lastAppliedDisplayProfileId = lastAppliedDisplayProfileId,
             )
         }
         return combine(
@@ -194,6 +197,7 @@ class PerformanceRepository(
                             selectedProfileId = storage.selectedProfileId?.takeIf { id ->
                                 orderedRealProfiles.any { it.id == id }
                             },
+                            lastAppliedDisplayProfileId = storage.lastAppliedDisplayProfileId,
                             displayProfiles = ProfileStateResolver.buildDisplayProfiles(
                                 realProfiles = orderedRealProfiles,
                                 stockProfile = stockProfile,
@@ -277,7 +281,10 @@ class PerformanceRepository(
             return Result.failure(IllegalStateException("No profiles available for tile cycling"))
         }
 
-        val currentIndex = cycleProfiles.indexOfFirst { it.id == state.activeDisplayProfileId }
+        val currentProfileId = state.lastAppliedDisplayProfileId
+            ?.takeIf { id -> cycleProfiles.any { profile -> profile.id == id } }
+            ?: state.activeDisplayProfileId
+        val currentIndex = cycleProfiles.indexOfFirst { it.id == currentProfileId }
         val nextProfile = if (currentIndex == -1) {
             cycleProfiles.first()
         } else {
@@ -532,37 +539,6 @@ class PerformanceRepository(
             isReadyForBoot = true,
             isReading = false,
             error = null,
-        )
-    }
-
-        val previous = stockCaptureState.takeIf { it.bootId == bootId } ?: StockCaptureState(bootId = bootId)
-        val consecutiveEqualReads = if (previous.lastRead == detectedValues) {
-            previous.consecutiveEqualReads + 1
-        } else {
-            1
-        }
-        val attempts = previous.attempts + 1
-        val nextState = previous.copy(
-            lastRead = detectedValues,
-            consecutiveEqualReads = consecutiveEqualReads,
-            attempts = attempts,
-            error = when {
-                consecutiveEqualReads >= REQUIRED_STABLE_READS -> null
-                attempts >= MAX_STOCK_READ_ATTEMPTS -> "Unable to read stable stock values"
-                else -> null
-            },
-        )
-        stockCaptureState = nextState
-
-        val completedValues = when {
-            consecutiveEqualReads >= REQUIRED_STABLE_READS -> detectedValues
-            else -> null
-        }
-        return StockBootstrapResult(
-            completedValues = completedValues,
-            isReadyForBoot = completedValues != null,
-            isReading = completedValues == null && nextState.error == null,
-            error = nextState.error,
         )
     }
 
