@@ -52,6 +52,7 @@ class PerformanceTileService : TileService() {
     override fun onTileAdded() {
         super.onTileAdded()
         persistTileAddedState(isAdded = true)
+        refreshTileState()
     }
 
     override fun onTileRemoved() {

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.aure.clustertune.AppContainer
+import com.aure.clustertune.tile.QuickSettingsTileRefresher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -23,6 +24,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     return@launch
                 }
                 container.repository.applyPersistedLastValuesOnBoot()
+                QuickSettingsTileRefresher.requestUpdate(context)
             } finally {
                 pendingResult.finish()
             }
