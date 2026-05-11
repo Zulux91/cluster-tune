@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,6 +81,7 @@ import kotlinx.coroutines.delay
 
 private const val NEW_PROFILE_DIALOG_ID = "__new_profile__"
 
+@androidx.compose.foundation.ExperimentalFoundationApi
 @Composable
 fun MainTunerScreen(
     state: TunerState,
@@ -86,7 +89,7 @@ fun MainTunerScreen(
     onApplyCurrent: (TunerState) -> Unit,
     onCreateProfile: (String, TunerState) -> Unit,
     onUpdateProfile: (String, String, TunerState) -> Unit,
-    onDeleteProfile: (String) -> Unit,
+    onDeleteProfiles: (Set<String>) -> Unit,
     onMoveProfile: (String, Int) -> Unit,
     onOpenSettings: () -> Unit,
     onRefreshLiveValues: () -> Unit,
@@ -95,6 +98,12 @@ fun MainTunerScreen(
 ) {
     var dialogProfileId by remember { mutableStateOf<String?>(null) }
     var sliderUsePercentage by remember { mutableStateOf(false) }
+    var deletionSelection by remember { mutableStateOf(emptySet<String>()) }
+    val inDeletionMode = deletionSelection.isNotEmpty()
+
+    BackHandler(enabled = inDeletionMode) {
+        deletionSelection = emptySet()
+    }
 
     ScreenNotifications(
         state = state,
@@ -122,6 +131,7 @@ fun MainTunerScreen(
                 state = state,
                 compactMode = false,
                 onOpenSettings = onOpenSettings,
+                actionsEnabled = !inDeletionMode,
             )
 
             if (state.isLoading) {
@@ -137,6 +147,7 @@ fun MainTunerScreen(
                 CurrentFrequenciesCard(
                     state = state,
                     onEditManual = { dialogProfileId = ProfileStateResolver.MANUAL_PROFILE_ID },
+                    enabled = !inDeletionMode,
                 )
 
                 ProfileListSection(
@@ -146,6 +157,9 @@ fun MainTunerScreen(
                     onEditProfile = { dialogProfileId = it },
                     onMoveProfile = onMoveProfile,
                     onApplySelectedProfile = { onApplyCurrent(state) },
+                    onDeleteProfiles = onDeleteProfiles,
+                    deletionSelection = deletionSelection,
+                    onDeletionSelectionChange = { deletionSelection = it },
                 )
             }
         }
@@ -187,10 +201,6 @@ fun MainTunerScreen(
                     profileId == ProfileStateResolver.MANUAL_PROFILE_ID -> onApplyCurrent(editedState)
                     profile != null -> onUpdateProfile(profile.id, name, editedState)
                 }
-                dialogProfileId = null
-            },
-            onDelete = {
-                profile?.let { onDeleteProfile(it.id) }
                 dialogProfileId = null
             },
         )
@@ -371,6 +381,7 @@ private fun Header(
     state: TunerState,
     compactMode: Boolean,
     onOpenSettings: (() -> Unit)?,
+    actionsEnabled: Boolean = true,
 ) {
     if (compactMode && state.statusMessage == null && state.errorMessage == null) return
 
@@ -389,7 +400,7 @@ private fun Header(
                     modifier = Modifier.weight(1f),
                 )
                 onOpenSettings?.let { openSettings ->
-                    IconButton(onClick = openSettings) {
+                    IconButton(onClick = openSettings, enabled = actionsEnabled) {
                         Icon(
                             imageVector = Icons.Rounded.Settings,
                             contentDescription = "Settings",
@@ -421,6 +432,7 @@ private fun Header(
 private fun CurrentFrequenciesCard(
     state: TunerState,
     onEditManual: () -> Unit = {},
+    enabled: Boolean = true,
 ) {
     SectionCard(
         title = null,
@@ -451,6 +463,7 @@ private fun CurrentFrequenciesCard(
                 ) {
                     IconButton(
                         onClick = onEditManual,
+                        enabled = enabled,
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
@@ -464,6 +477,7 @@ private fun CurrentFrequenciesCard(
     }
 }
 
+@androidx.compose.foundation.ExperimentalFoundationApi
 @Composable
 private fun ProfileListSection(
     state: TunerState,
@@ -472,10 +486,17 @@ private fun ProfileListSection(
     onEditProfile: (String) -> Unit,
     onMoveProfile: (String, Int) -> Unit,
     onApplySelectedProfile: () -> Unit,
+    onDeleteProfiles: (Set<String>) -> Unit,
+    deletionSelection: Set<String>,
+    onDeletionSelectionChange: (Set<String>) -> Unit,
 ) {
+    val inDeletionMode = deletionSelection.isNotEmpty()
+    var pendingDeleteIds by remember { mutableStateOf<Set<String>?>(null) }
+    val colorScheme = MaterialTheme.colorScheme
+
     SectionCard(
         title = null,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f),
+        containerColor = colorScheme.surfaceContainer.copy(alpha = 0.72f),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -487,17 +508,21 @@ private fun ProfileListSection(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            TextButton(onClick = onOpenCreateProfile) {
-                Icon(
-                    Icons.Rounded.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    text = "New",
-                    color = MaterialTheme.colorScheme.primary,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (inDeletionMode) {
+                    IconButton(onClick = { pendingDeleteIds = deletionSelection.toSet() }) {
+                        Icon(
+                            Icons.Rounded.Delete,
+                            contentDescription = "Delete selected profiles",
+                            tint = colorScheme.error,
+                        )
+                    }
+                }
+                TextButton(onClick = onOpenCreateProfile, enabled = !inDeletionMode) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(Modifier.size(6.dp))
+                    Text(text = "New")
+                }
             }
         }
 
@@ -505,28 +530,48 @@ private fun ProfileListSection(
             state.displayProfiles.forEach { profile ->
                 val movableIndex = state.displayProfiles.indexOfFirst { it.id == profile.id }
                 val canMove = movableIndex >= 0
+                val isSelectedForDeletion = profile.id in deletionSelection
                 ProfileListRow(
                     profile = profile,
                     isApplied = profile.id == state.activeDisplayProfileId,
                     isSelected = profile.id == state.selectedDisplayProfileId,
+                    isSelectedForDeletion = isSelectedForDeletion,
+                    inDeletionMode = inDeletionMode,
                     canMoveUp = canMove && movableIndex > 0,
                     canMoveDown = canMove && movableIndex < state.displayProfiles.lastIndex,
                     showReorder = true,
                     showEdit = profile.isEditable,
+                    showDelete = profile.isDeletable,
                     valuePreview = profile.maxFrequencies,
-                    onClick = { onApplyProfile(profile) },
+                    onClick = if (inDeletionMode && profile.isDeletable) {
+                        {
+                            onDeletionSelectionChange(
+                                if (isSelectedForDeletion)
+                                    deletionSelection - profile.id
+                                else
+                                    deletionSelection + profile.id
+                            )
+                        }
+                    } else {
+                        { onApplyProfile(profile) }
+                    },
                     onEdit = {
                         if (profile.isEditable) {
                             onEditProfile(profile.id)
                         }
                     },
+                    onDelete = { pendingDeleteIds = setOf(profile.id) },
+                    onLongPress = if (profile.isDeletable) {
+                        { onDeletionSelectionChange(deletionSelection + profile.id) }
+                    } else null,
                     onMoveProfile = { offset -> onMoveProfile(profile.id, offset) },
                     freqPercent = profileFreqPercent(profile, state.policies),
                 )
             }
         }
 
-        val canApplySelectedProfile = state.selectedDisplayProfileId != null &&
+        val canApplySelectedProfile = !inDeletionMode &&
+            state.selectedDisplayProfileId != null &&
             state.policies.isNotEmpty() &&
             state.isPServerAvailable
         Spacer(Modifier.size(4.dp))
@@ -546,6 +591,41 @@ private fun ProfileListSection(
             }
         }
     }
+
+    pendingDeleteIds?.let { ids ->
+        val isSingle = ids.size == 1
+        val profileName = if (isSingle) {
+            state.displayProfiles.firstOrNull { it.id == ids.first() }?.name
+        } else null
+        AlertDialog(
+            onDismissRequest = { pendingDeleteIds = null },
+            title = {
+                Text(if (isSingle) "Delete profile?" else "Delete ${ids.size} profiles?")
+            },
+            text = {
+                Text(
+                    if (isSingle && profileName != null)
+                        "\"$profileName\" will be permanently removed."
+                    else
+                        "${ids.size} profiles will be permanently removed.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteProfiles(ids)
+                    onDeletionSelectionChange(emptySet())
+                    pendingDeleteIds = null
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteIds = null }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
 }
 
 private fun profileFreqPercent(profile: PerformanceProfile, policies: List<CpuPolicyInfo>): Int? {
@@ -558,43 +638,52 @@ private fun profileFreqPercent(profile: PerformanceProfile, policies: List<CpuPo
     return if (percent >= 100) null else percent
 }
 
+@androidx.compose.foundation.ExperimentalFoundationApi
 @Composable
 private fun ProfileListRow(
     profile: PerformanceProfile,
     isApplied: Boolean,
     isSelected: Boolean,
+    isSelectedForDeletion: Boolean,
+    inDeletionMode: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     showReorder: Boolean,
     showEdit: Boolean,
+    showDelete: Boolean,
     valuePreview: Map<Int, Int>,
     onClick: () -> Unit,
     onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onLongPress: (() -> Unit)?,
     onMoveProfile: (Int) -> Unit,
     freqPercent: Int? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val rowShape = RoundedCornerShape(20.dp)
     val containerColor = when {
-        isApplied && isSelected -> colorScheme.primaryContainer
+        isSelectedForDeletion -> colorScheme.errorContainer
         isApplied -> colorScheme.primaryContainer
         else -> colorScheme.surfaceContainerHigh
     }
     val contentColor = when {
-        isApplied && isSelected -> colorScheme.onPrimaryContainer
+        isSelectedForDeletion -> colorScheme.onErrorContainer
         isApplied -> colorScheme.onPrimaryContainer
         else -> colorScheme.onSurface
     }
     val borderColor = when {
+        isSelectedForDeletion -> colorScheme.error
         isApplied -> colorScheme.primary
         isSelected -> colorScheme.primary
         else -> Color.Transparent
     }
     val chipContainerColor = when {
+        isSelectedForDeletion -> colorScheme.error.copy(alpha = 0.20f)
         isApplied -> colorScheme.secondaryContainer.copy(alpha = 0.92f)
         else -> colorScheme.primaryContainer.copy(alpha = 0.92f)
     }
     val chipContentColor = when {
+        isSelectedForDeletion -> colorScheme.onErrorContainer
         isApplied -> colorScheme.onSecondaryContainer
         else -> colorScheme.onPrimaryContainer
     }
@@ -604,12 +693,12 @@ private fun ProfileListRow(
             .fillMaxWidth()
             .background(containerColor, rowShape)
             .border(BorderStroke(2.dp, borderColor), rowShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showReorder) {
+        if (showReorder && !inDeletionMode) {
             ReorderControl(
                 enabled = true,
                 canMoveUp = canMoveUp,
@@ -637,16 +726,29 @@ private fun ProfileListRow(
                 )
             }
         }
-        if (showEdit) {
-            IconButton(onClick = onEdit) {
-                Icon(
-                    Icons.Rounded.Edit,
-                    contentDescription = "Edit ${profile.name}",
-                    tint = contentColor,
-                )
+        if (!inDeletionMode) {
+            if (showEdit) {
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        Icons.Rounded.Edit,
+                        contentDescription = "Edit ${profile.name}",
+                        tint = contentColor,
+                    )
+                }
+            } else {
+                Spacer(Modifier.size(48.dp))
             }
-        } else {
-            Spacer(Modifier.size(48.dp))
+            if (showDelete) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = "Delete ${profile.name}",
+                        tint = colorScheme.error,
+                    )
+                }
+            } else {
+                Spacer(Modifier.size(48.dp))
+            }
         }
     }
 }
@@ -830,7 +932,6 @@ private fun ProfileEditorDialog(
     onUsePercentageChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: (String, Map<Int, Int>) -> Unit,
-    onDelete: () -> Unit,
 ) {
     val initialValues = remember(profile?.id, creatingNewProfile, manualMode, baseState.actualValues) {
         baseState.policies.associate { policy ->
@@ -843,7 +944,6 @@ private fun ProfileEditorDialog(
     }
     var profileName by remember(profile?.id, creatingNewProfile) { mutableStateOf(profile?.name.orEmpty()) }
     var editedValues by remember(profile?.id, initialValues) { mutableStateOf(initialValues) }
-    var showDeleteConfirmation by remember(profile?.id) { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -918,32 +1018,17 @@ private fun ProfileEditorDialog(
                 } else {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (profile?.isDeletable == true) {
-                            IconButton(
-                                onClick = { showDeleteConfirmation = true },
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Delete,
-                                    contentDescription = "Delete profile",
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        } else {
-                            Spacer(Modifier.size(48.dp))
+                        TextButton(onClick = onDismiss) {
+                            Text("Cancel")
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            TextButton(onClick = onDismiss) {
-                                Text("Cancel")
-                            }
-                            Button(
-                                onClick = { onSave(profileName, editedValues) },
-                                enabled = profileName.isNotBlank() && baseState.policies.isNotEmpty(),
-                            ) {
-                                Text("Save")
-                            }
+                        Button(
+                            onClick = { onSave(profileName, editedValues) },
+                            enabled = profileName.isNotBlank() && baseState.policies.isNotEmpty(),
+                        ) {
+                            Text("Save")
                         }
                     }
                 }
@@ -951,28 +1036,6 @@ private fun ProfileEditorDialog(
         }
     }
 
-    if (showDeleteConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("Delete profile?") },
-            text = { Text("This profile will be removed until you reset profiles to default.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirmation = false
-                        onDelete()
-                    },
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmation = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
-    }
 }
 
 @Composable

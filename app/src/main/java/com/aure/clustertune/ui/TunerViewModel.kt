@@ -171,6 +171,15 @@ class TunerViewModel(
         }
     }
 
+    fun deleteProfiles(profileIds: Set<String>) {
+        viewModelScope.launch {
+            profileIds.forEach { repository.deleteProfile(it) }
+            val n = profileIds.size
+            transientMessage.value = "Deleted $n profile${if (n == 1) "" else "s"}"
+            transientError.value = null
+        }
+    }
+
     fun moveProfile(profileId: String, offset: Int) {
         viewModelScope.launch {
             repository.moveProfile(profileId, offset)

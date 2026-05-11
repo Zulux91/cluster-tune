@@ -338,6 +338,9 @@ class PerformanceRepository(
         if (profileStorage.selectedProfileId.first() == profileId) {
             profileStorage.persistSelectedProfile(null)
         }
+        if (profileStorage.lastAppliedDisplayProfileId.first() == profileId) {
+            profileStorage.persistLastAppliedDisplayProfile(null)
+        }
     }
 
     suspend fun moveProfile(profileId: String, offset: Int) {

@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         uri?.let(::importProfilesFromUri)
     }
 
+    @androidx.compose.foundation.ExperimentalFoundationApi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -108,7 +109,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onCreateProfile = viewModel::createUserProfile,
                             onUpdateProfile = viewModel::updateProfile,
-                            onDeleteProfile = viewModel::deleteProfile,
+                            onDeleteProfiles = viewModel::deleteProfiles,
                             onMoveProfile = viewModel::moveProfile,
                             onOpenSettings = { showSettings = true },
                             onRefreshLiveValues = viewModel::refreshLiveState,
