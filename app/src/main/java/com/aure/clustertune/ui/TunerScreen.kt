@@ -42,6 +42,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -91,6 +94,7 @@ fun MainTunerScreen(
     onErrorMessageShown: () -> Unit,
 ) {
     var dialogProfileId by remember { mutableStateOf<String?>(null) }
+    var sliderUsePercentage by remember { mutableStateOf(false) }
 
     ScreenNotifications(
         state = state,
@@ -173,6 +177,8 @@ fun MainTunerScreen(
             profile = profile,
             creatingNewProfile = profileId == NEW_PROFILE_DIALOG_ID,
             manualMode = profileId == ProfileStateResolver.MANUAL_PROFILE_ID,
+            usePercentage = sliderUsePercentage,
+            onUsePercentageChange = { sliderUsePercentage = it },
             onDismiss = { dialogProfileId = null },
             onSave = { name, values ->
                 val editedState = state.copy(currentValues = values)
@@ -820,6 +826,8 @@ private fun ProfileEditorDialog(
     profile: PerformanceProfile?,
     creatingNewProfile: Boolean,
     manualMode: Boolean,
+    usePercentage: Boolean,
+    onUsePercentageChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onSave: (String, Map<Int, Int>) -> Unit,
     onDelete: () -> Unit,
@@ -866,6 +874,20 @@ private fun ProfileEditorDialog(
                         label = { Text("Profile name") },
                     )
                 }
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = !usePercentage,
+                        onClick = { onUsePercentageChange(false) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        label = { Text("Frequency") },
+                    )
+                    SegmentedButton(
+                        selected = usePercentage,
+                        onClick = { onUsePercentageChange(true) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        label = { Text("Percentage") },
+                    )
+                }
                 baseState.policies.forEach { policy ->
                     PolicyCard(
                         policy = policy,
@@ -875,6 +897,7 @@ private fun ProfileEditorDialog(
                             editedValues = editedValues + (policy.id to editedValue)
                         },
                         compactMode = true,
+                        usePercentage = usePercentage,
                     )
                 }
                 if (manualMode) {
@@ -972,10 +995,14 @@ private fun PolicyCard(
     onValueChanged: (Int) -> Unit,
     compactMode: Boolean = false,
     actualValue: Int = selectedValue,
+    usePercentage: Boolean = false,
 ) {
     val supported = policy.supportedFrequencies
     val displaySelectedValue = policy.clampToWritableMax(selectedValue)
     val currentIndex = supported.indexOf(displaySelectedValue).takeIf { it >= 0 } ?: supported.lastIndex
+
+    fun freqToPercent(freqKhz: Int): Int =
+        (freqKhz * 100f / policy.selectableMaxFreq).roundToInt().coerceIn(0, 100)
     val actualSatisfiesSelected = ProfileStateResolver.isPolicyValueSatisfied(
         policy = policy,
         requestedValue = selectedValue,
@@ -1051,7 +1078,11 @@ private fun PolicyCard(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = formatFrequency(selectedValue, boosted = policy.isBoosted(selectedValue)),
+                    text = if (usePercentage) {
+                        "${freqToPercent(displaySelectedValue)}%"
+                    } else {
+                        formatFrequency(selectedValue, boosted = policy.isBoosted(selectedValue))
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.End,
                 )
