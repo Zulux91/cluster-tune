@@ -71,6 +71,7 @@ import com.aure.clustertune.model.PerformanceProfile
 import com.aure.clustertune.model.ProfileStateResolver
 import com.aure.clustertune.model.ProfileSource
 import com.aure.clustertune.model.TunerState
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private const val NEW_PROFILE_DIALOG_ID = "__new_profile__"
@@ -514,6 +515,7 @@ private fun ProfileListSection(
                         }
                     },
                     onMoveProfile = { offset -> onMoveProfile(profile.id, offset) },
+                    freqPercent = profileFreqPercent(profile, state.policies),
                 )
             }
         }
@@ -540,6 +542,16 @@ private fun ProfileListSection(
     }
 }
 
+private fun profileFreqPercent(profile: PerformanceProfile, policies: List<CpuPolicyInfo>): Int? {
+    if (profile.source == ProfileSource.VIRTUAL) return null
+    val ratios = policies.mapNotNull { policy ->
+        profile.maxFrequencies[policy.id]?.toDouble()?.div(policy.selectableMaxFreq)
+    }
+    if (ratios.isEmpty()) return null
+    val percent = (ratios.average() * 100).roundToInt()
+    return if (percent >= 100) null else percent
+}
+
 @Composable
 private fun ProfileListRow(
     profile: PerformanceProfile,
@@ -553,6 +565,7 @@ private fun ProfileListRow(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onMoveProfile: (Int) -> Unit,
+    freqPercent: Int? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val rowShape = RoundedCornerShape(20.dp)
@@ -605,7 +618,7 @@ private fun ProfileListRow(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = profile.name,
+                text = if (freqPercent != null) "${profile.name} ($freqPercent%)" else profile.name,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = contentColor,
@@ -718,8 +731,9 @@ private fun ProfileChipSelector(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             state.displayProfiles.forEach { profile ->
+                val percent = profileFreqPercent(profile, state.policies)
                 ProfileSelectorChip(
-                    label = profile.name,
+                    label = if (percent != null) "${profile.name} ($percent%)" else profile.name,
                     isApplied = profile.id == state.activeDisplayProfileId,
                     isSelected = profile.id == state.selectedDisplayProfileId,
                     onClick = { onApplyProfile(profile) },
