@@ -573,7 +573,8 @@ private fun ProfileListSection(
         val canApplySelectedProfile = !inDeletionMode &&
             state.selectedDisplayProfileId != null &&
             state.policies.isNotEmpty() &&
-            state.isPServerAvailable
+            state.isPServerAvailable &&
+            state.selectedDisplayProfileId != state.activeDisplayProfileId
         Spacer(Modifier.size(4.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
