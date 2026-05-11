@@ -130,19 +130,28 @@ class MainActivity : ComponentActivity() {
 
             container.settingsStorage.persistQuickSettingsTilePromptShown()
             if (QuickSettingsTilePrompt.isSupported) {
-                requestQuickSettingsTile(showResultToast = false)
+                requestQuickSettingsTile(showResultToast = false, showDeclineHint = true)
             }
         }
     }
 
-    private fun requestQuickSettingsTile(showResultToast: Boolean) {
+    private fun requestQuickSettingsTile(showResultToast: Boolean, showDeclineHint: Boolean = false) {
         QuickSettingsTilePrompt.request(this) { result ->
             if (result == QuickSettingsTileAddResult.ADDED || result == QuickSettingsTileAddResult.ALREADY_ADDED) {
                 lifecycleScope.launch {
                     container.settingsStorage.persistQuickSettingsTileAdded(true)
                 }
             }
-            if (!showResultToast) return@request
+            if (!showResultToast) {
+                if (showDeclineHint && result == QuickSettingsTileAddResult.NOT_ADDED) {
+                    Toast.makeText(
+                        applicationContext,
+                        "Quick Settings tile not added. You can add it later from the Settings tab.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                return@request
+            }
             Toast.makeText(
                 applicationContext,
                 result.toToastMessage(),
