@@ -14,6 +14,16 @@ internal object DeviceProfileGenerator {
         Tier("heavy", "Heavy Underclock", 0.50),
     )
 
+    fun frequenciesForPercentage(policies: List<CpuPolicyInfo>, percentage: Int): Map<Int, Int> {
+        val ratio = percentage / 100.0
+        return policies.associate { policy ->
+            val target = (policy.selectableMaxFreq * ratio).toInt()
+            val nearest = policy.supportedFrequencies.minByOrNull { kotlin.math.abs(it - target) }
+                ?: policy.selectableMaxFreq
+            policy.id to nearest
+        }
+    }
+
     fun generate(socModel: String, policies: List<CpuPolicyInfo>): List<PerformanceProfile> {
         val socId = socModel.lowercase().replace(Regex("[^a-z0-9]"), "_")
         return tiers.mapIndexed { index, tier ->

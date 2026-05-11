@@ -18,4 +18,5 @@ data class AppSettings(
     val applyLastProfileOnBoot: Boolean = false,
     val hasPromptedQuickSettingsTile: Boolean = false,
     val isQuickSettingsTileAdded: Boolean = false,
+    val hasCompletedOnboarding: Boolean = false,
 )

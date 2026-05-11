@@ -185,6 +185,15 @@ class TunerViewModel(
         }
     }
 
+    fun completeOnboarding(entries: List<Pair<String, Map<Int, Int>>>) {
+        viewModelScope.launch {
+            entries.forEach { (name, frequencies) ->
+                repository.createUserProfile(name, frequencies)
+            }
+            settingsStorage.persistOnboardingCompleted()
+        }
+    }
+
     suspend fun exportProfilesJson(): String {
         return repository.exportProfilesJson()
     }

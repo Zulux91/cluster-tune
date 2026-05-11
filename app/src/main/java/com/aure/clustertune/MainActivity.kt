@@ -19,6 +19,7 @@ import com.aure.clustertune.tile.QuickSettingsTileAddResult
 import com.aure.clustertune.tile.QuickSettingsTilePrompt
 import com.aure.clustertune.tile.QuickSettingsTileRefresher
 import com.aure.clustertune.ui.MainTunerScreen
+import com.aure.clustertune.ui.OnboardingScreen
 import com.aure.clustertune.ui.SettingsScreen
 import com.aure.clustertune.ui.TunerViewModel
 import com.aure.clustertune.ui.theme.ClusterTuneTheme
@@ -57,8 +58,15 @@ class MainActivity : ComponentActivity() {
                     val state = viewModel.state.collectAsStateWithLifecycle().value
                     var showSettings by rememberSaveable { mutableStateOf(false) }
 
-                    if (showSettings) {
-                        SettingsScreen(
+                    when {
+                        !state.isLoading && state.isPServerAvailable && !settings.hasCompletedOnboarding
+                            && state.bundledProfiles.isEmpty() && state.userProfiles.isEmpty() -> {
+                            OnboardingScreen(
+                                policies = state.policies,
+                                onComplete = viewModel::completeOnboarding,
+                            )
+                        }
+                        showSettings -> SettingsScreen(
                             settings = settings,
                             onBack = { showSettings = false },
                             onColorSourceChange = viewModel::setColorSource,
@@ -82,8 +90,7 @@ class MainActivity : ComponentActivity() {
                             canRequestAddQuickSettingsTile = QuickSettingsTilePrompt.isSupported,
                             isQuickSettingsTileAdded = settings.isQuickSettingsTileAdded,
                         )
-                    } else {
-                        MainTunerScreen(
+                        else -> MainTunerScreen(
                             state = state,
                             onApplyProfile = viewModel::applyProfile,
                             onApplyCurrent = { tunerState ->
