@@ -51,10 +51,11 @@ private data class OnboardingEntry(
 )
 
 private val defaultTiers = listOf(
-    Triple(85, "Light Underclock", "light"),
-    Triple(65, "Medium Underclock", "medium"),
-    Triple(50, "Heavy Underclock", "heavy"),
-    Triple(40, "Extreme Underclock", "extreme"),
+    Triple(85, "Light Underclock",   "light"),
+    Triple(75, "Medium Underclock",  "medium"),
+    Triple(65, "Heavy Underclock",   "heavy"),
+    Triple(50, "Extreme Underclock", "extreme"),
+    Triple(40, "Ultra Underclock",   "ultra"),
 )
 
 @Composable
@@ -77,7 +78,7 @@ fun OnboardingScreen(
     }
 
     var selectedPercentages by remember(allEntries) {
-        mutableStateOf(allEntries.map { it.percentage }.toSet())
+        mutableStateOf(allEntries.filter { it.percentage > 65 }.map { it.percentage }.toSet())
     }
 
     var useBundled by remember { mutableStateOf(bundledProfiles.isNotEmpty()) }

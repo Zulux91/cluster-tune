@@ -9,9 +9,11 @@ internal object DeviceProfileGenerator {
     private data class Tier(val suffix: String, val name: String, val ratio: Double)
 
     private val tiers = listOf(
-        Tier("light", "Light Underclock", 0.85),
-        Tier("medium", "Medium Underclock", 0.65),
-        Tier("heavy", "Heavy Underclock", 0.50),
+        Tier("light",   "Light Underclock",   0.85),
+        Tier("medium",  "Medium Underclock",  0.75),
+        Tier("heavy",   "Heavy Underclock",   0.65),
+        Tier("extreme", "Extreme Underclock", 0.50),
+        Tier("ultra",   "Ultra Underclock",   0.40),
     )
 
     fun frequenciesForPercentage(policies: List<CpuPolicyInfo>, percentage: Int): Map<Int, Int> {

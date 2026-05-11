@@ -14,10 +14,13 @@ class DeviceProfileGeneratorTest {
     )
 
     @Test
-    fun `generates three tiers`() {
+    fun `generates five tiers`() {
         val profiles = DeviceProfileGenerator.generate("SM8750", policies)
-        assertEquals(3, profiles.size)
-        assertEquals(listOf("Light Underclock", "Medium Underclock", "Heavy Underclock"), profiles.map { it.name })
+        assertEquals(5, profiles.size)
+        assertEquals(
+            listOf("Light Underclock", "Medium Underclock", "Heavy Underclock", "Extreme Underclock", "Ultra Underclock"),
+            profiles.map { it.name },
+        )
     }
 
     @Test
