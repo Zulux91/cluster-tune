@@ -67,8 +67,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     when {
-                        !state.isLoading && state.isPServerAvailable && !settings.hasCompletedOnboarding
-                            && state.userProfiles.isEmpty() -> {
+                        !state.isLoading && state.isPServerAvailable && !settings.hasCompletedOnboarding -> {
                             OnboardingScreen(
                                 policies = state.policies,
                                 bundledProfiles = state.bundledProfiles,

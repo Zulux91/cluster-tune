@@ -168,7 +168,10 @@ fun OnboardingScreen(
                 Button(
                     onClick = {
                         if (useBundled && bundledProfiles.isNotEmpty()) {
-                            onComplete(emptyList(), emptyList())
+                            onComplete(
+                                bundledProfiles.map { profile -> profile.name to profile.maxFrequencies },
+                                bundledProfiles.map { it.id },
+                            )
                         } else {
                             onComplete(
                                 allEntries
