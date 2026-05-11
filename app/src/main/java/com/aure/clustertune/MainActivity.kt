@@ -23,6 +23,7 @@ import com.aure.clustertune.ui.OnboardingScreen
 import com.aure.clustertune.ui.SettingsScreen
 import com.aure.clustertune.ui.TunerViewModel
 import com.aure.clustertune.ui.theme.ClusterTuneTheme
+import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -57,6 +58,12 @@ class MainActivity : ComponentActivity() {
                 Surface {
                     val state = viewModel.state.collectAsStateWithLifecycle().value
                     var showSettings by rememberSaveable { mutableStateOf(false) }
+
+                    LaunchedEffect(settings.hasCompletedOnboarding) {
+                        if (settings.hasCompletedOnboarding) {
+                            maybeRequestQuickSettingsTileOnFirstRun()
+                        }
+                    }
 
                     when {
                         !state.isLoading && state.isPServerAvailable && !settings.hasCompletedOnboarding
@@ -118,6 +125,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val settings = container.settingsStorage.settings.first()
             if (settings.hasPromptedQuickSettingsTile) return@launch
+            if (!settings.hasCompletedOnboarding) return@launch
 
             container.settingsStorage.persistQuickSettingsTilePromptShown()
             if (QuickSettingsTilePrompt.isSupported) {
