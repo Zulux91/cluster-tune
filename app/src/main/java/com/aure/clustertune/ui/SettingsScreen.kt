@@ -24,6 +24,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ private val accentColorOptions = listOf(
 fun SettingsScreen(
     settings: AppSettings,
     onBack: () -> Unit,
+    onRevertSettings: (AppSettings) -> Unit,
     onColorSourceChange: (AppColorSource) -> Unit,
     onAccentColorChange: (Int) -> Unit,
     onTileTapBehaviorChange: (TileInteractionBehavior) -> Unit,
@@ -62,7 +64,17 @@ fun SettingsScreen(
     canRequestAddQuickSettingsTile: Boolean,
     isQuickSettingsTileAdded: Boolean,
 ) {
+    val initialSettings = remember { settings }
     var showResetConfirmation by remember { mutableStateOf(false) }
+    var showDiscardConfirmation by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (settings != initialSettings) {
+            showDiscardConfirmation = true
+        } else {
+            onBack()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -84,8 +96,19 @@ fun SettingsScreen(
                     fontWeight = FontWeight.Bold,
                 )
             }
-            TextButton(onClick = onBack) {
-                Text("Done")
+            val hasChanges = settings != initialSettings
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = {
+                    if (hasChanges) showDiscardConfirmation = true else onBack()
+                }) {
+                    Text(if (hasChanges) "Discard" else "Back")
+                }
+                TextButton(
+                    onClick = onBack,
+                    enabled = hasChanges,
+                ) {
+                    Text("Done")
+                }
             }
         }
 
@@ -236,6 +259,33 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showResetConfirmation = false }) {
                     Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showDiscardConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirmation = false },
+            title = { Text("You have changes") },
+            text = { Text("Keep your changes or discard them to revert to the previous settings.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardConfirmation = false
+                        onRevertSettings(initialSettings)
+                        onBack()
+                    },
+                ) {
+                    Text("Discard")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDiscardConfirmation = false
+                    onBack()
+                }) {
+                    Text("Keep")
                 }
             },
         )

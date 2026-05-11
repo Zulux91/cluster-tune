@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
                         showSettings -> SettingsScreen(
                             settings = settings,
                             onBack = { showSettings = false },
+                            onRevertSettings = viewModel::revertSettings,
                             onColorSourceChange = viewModel::setColorSource,
                             onAccentColorChange = viewModel::setAccentColor,
                             onTileTapBehaviorChange = { behavior ->

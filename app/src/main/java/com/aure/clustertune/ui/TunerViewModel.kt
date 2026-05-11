@@ -234,6 +234,15 @@ class TunerViewModel(
         }
     }
 
+    fun revertSettings(snapshot: AppSettings) {
+        viewModelScope.launch {
+            settingsStorage.persistColorSource(snapshot.colorSource)
+            settingsStorage.persistAccentColor(snapshot.accentColor)
+            settingsStorage.persistTileTapBehavior(snapshot.tileTapBehavior)
+            settingsStorage.persistApplyLastProfileOnBoot(snapshot.applyLastProfileOnBoot)
+        }
+    }
+
     fun refreshLiveState() {
         repository.refreshLiveValues()
     }
