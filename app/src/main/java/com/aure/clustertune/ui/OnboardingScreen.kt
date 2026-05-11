@@ -25,6 +25,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aure.clustertune.data.DeviceProfileGenerator
 import com.aure.clustertune.model.CpuPolicyInfo
+import com.aure.clustertune.model.PerformanceProfile
 
 private data class OnboardingEntry(
     val percentage: Int,
@@ -56,7 +60,8 @@ private val defaultTiers = listOf(
 @Composable
 fun OnboardingScreen(
     policies: List<CpuPolicyInfo>,
-    onComplete: (List<Pair<String, Map<Int, Int>>>) -> Unit,
+    bundledProfiles: List<PerformanceProfile> = emptyList(),
+    onComplete: (List<Pair<String, Map<Int, Int>>>, List<String>) -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
@@ -74,6 +79,8 @@ fun OnboardingScreen(
     var selectedPercentages by remember(allEntries) {
         mutableStateOf(allEntries.map { it.percentage }.toSet())
     }
+
+    var useBundled by remember { mutableStateOf(bundledProfiles.isNotEmpty()) }
 
     Box(
         modifier = Modifier
@@ -106,27 +113,53 @@ fun OnboardingScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "Choose which performance presets to create for your device. You can add more and edit these anytime from the app.",
+                        text = if (bundledProfiles.isEmpty())
+                            "Choose which performance presets to create for your device. You can add more and edit these anytime from the app."
+                        else
+                            "Your device has optimized profiles available. Pick a setup method below.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colorScheme.onSurface.copy(alpha = 0.7f),
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    allEntries.forEach { entry ->
-                        val isSelected = entry.percentage in selectedPercentages
-                        EntryCard(
-                            entry = entry,
-                            policies = policies,
-                            isSelected = isSelected,
-                            onToggle = {
-                                selectedPercentages = if (isSelected) {
-                                    selectedPercentages - entry.percentage
-                                } else {
-                                    selectedPercentages + entry.percentage
-                                }
-                            },
+                if (bundledProfiles.isNotEmpty()) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = useBundled,
+                            onClick = { useBundled = true },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            label = { Text("Device Profiles") },
                         )
+                        SegmentedButton(
+                            selected = !useBundled,
+                            onClick = { useBundled = false },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            label = { Text("Auto") },
+                        )
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (useBundled && bundledProfiles.isNotEmpty()) {
+                        bundledProfiles.forEach { profile ->
+                            BundledProfileCard(profile = profile, policies = policies)
+                        }
+                    } else {
+                        allEntries.forEach { entry ->
+                            val isSelected = entry.percentage in selectedPercentages
+                            EntryCard(
+                                entry = entry,
+                                policies = policies,
+                                isSelected = isSelected,
+                                onToggle = {
+                                    selectedPercentages = if (isSelected) {
+                                        selectedPercentages - entry.percentage
+                                    } else {
+                                        selectedPercentages + entry.percentage
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
 
@@ -134,14 +167,20 @@ fun OnboardingScreen(
 
                 Button(
                     onClick = {
-                        onComplete(
-                            allEntries
-                                .filter { it.percentage in selectedPercentages }
-                                .map { it.name to it.frequencies },
-                        )
+                        if (useBundled && bundledProfiles.isNotEmpty()) {
+                            onComplete(emptyList(), emptyList())
+                        } else {
+                            onComplete(
+                                allEntries
+                                    .filter { it.percentage in selectedPercentages }
+                                    .map { it.name to it.frequencies },
+                                bundledProfiles.map { it.id },
+                            )
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = selectedPercentages.isNotEmpty(),
+                    enabled = if (useBundled && bundledProfiles.isNotEmpty()) true
+                              else selectedPercentages.isNotEmpty(),
                 ) {
                     Text("Get Started")
                 }
@@ -236,5 +275,43 @@ private fun PercentageBadge(percentage: Int, isSelected: Boolean) {
             color = if (isSelected) colorScheme.primary else colorScheme.onPrimaryContainer,
             fontWeight = FontWeight.SemiBold,
         )
+    }
+}
+
+@Composable
+private fun BundledProfileCard(
+    profile: PerformanceProfile,
+    policies: List<CpuPolicyInfo>,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Card(
+        colors = CardDefaults.cardColors(containerColor = colorScheme.primaryContainer),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = profile.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = colorScheme.onPrimaryContainer,
+            )
+            policies.forEach { policy ->
+                val freq = profile.maxFrequencies[policy.id]
+                if (freq != null) {
+                    val label = if (policies.size > 1)
+                        "Cluster ${policy.id} (${policy.cpuIds.size} cores): ${formatFrequency(freq)}"
+                    else formatFrequency(freq)
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                    )
+                }
+            }
+        }
     }
 }

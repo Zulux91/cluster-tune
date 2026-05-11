@@ -68,9 +68,10 @@ class MainActivity : ComponentActivity() {
 
                     when {
                         !state.isLoading && state.isPServerAvailable && !settings.hasCompletedOnboarding
-                            && state.bundledProfiles.isEmpty() && state.userProfiles.isEmpty() -> {
+                            && state.userProfiles.isEmpty() -> {
                             OnboardingScreen(
                                 policies = state.policies,
+                                bundledProfiles = state.bundledProfiles,
                                 onComplete = viewModel::completeOnboarding,
                             )
                         }

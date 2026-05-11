@@ -194,8 +194,9 @@ class TunerViewModel(
         }
     }
 
-    fun completeOnboarding(entries: List<Pair<String, Map<Int, Int>>>) {
+    fun completeOnboarding(entries: List<Pair<String, Map<Int, Int>>>, bundledIdsToDelete: List<String>) {
         viewModelScope.launch {
+            bundledIdsToDelete.forEach { repository.deleteProfile(it) }
             entries.forEach { (name, frequencies) ->
                 repository.createUserProfile(name, frequencies)
             }
