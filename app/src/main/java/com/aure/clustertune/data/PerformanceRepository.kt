@@ -105,7 +105,15 @@ class PerformanceRepository(
                     }
                 }
                 val actualValues = policies.associate { it.id to it.currentMaxFreq }
-                val defaultBundledProfiles = bundledProfileProvider.createProfiles(policies)
+                val defaultBundledProfiles = bundledProfileProvider.createProfiles(policies).ifEmpty {
+                    val soc = bundledProfileProvider.currentSocModel()
+                    if (soc != null && policies.isNotEmpty()) {
+                        bundledProfileProvider.generateAndSave(soc, policies)
+                        bundledProfileProvider.createProfiles(policies)
+                    } else {
+                        emptyList()
+                    }
+                }
                 val storedById = storage.storedProfiles.associateBy { it.id }
                 val knownBundledIds = defaultBundledProfiles.map { it.id }.toSet()
                 val bundledProfiles = defaultBundledProfiles.mapIndexed { index, profile ->
