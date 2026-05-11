@@ -3,8 +3,8 @@
   ClusterTune
 </h1>
 
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/AurelioB/cluster-tune/total)
-![GitHub Release](https://img.shields.io/github/v/release/AurelioB/cluster-tune)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/Zulux91/cluster-tune/total)
+![GitHub Release](https://img.shields.io/github/v/release/Zulux91/cluster-tune)
 
 
 ClusterTune is an Android utility for tuning CPU frequency limits on supported handheld devices. It lets you adjust CPU clusters, save performance profiles, and access quick controls from an Android Quick Settings tile.
@@ -38,6 +38,7 @@ Lower CPU frequency caps can reduce power draw, which may help lower temperature
 - View the currently applied frequency cap for each cluster.
 - Save, edit, delete, reorder, import, and export profiles.
 - Use bundled profiles for supported devices.
+- Automatically generate profiles (85%/65%/50%) when no bundled SoC profile is available
 - Reapply the last profile on boot.
 - Quick Settings tile for fast access.
 - Customizable quick tile behavior
