@@ -23,6 +23,9 @@ ClusterTune underclocks by setting lower maximum CPU frequencies. It does not un
 Lower CPU frequency caps can reduce power draw, which may help lower temperatures, quiet the fan, and extend battery life. In some games, reducing CPU power and heat may also leave more thermal or power headroom for the GPU, especially when the game is GPU-bound.
 
 ## Screenshots
+| Onboarding with bundled profiles | Onboarding with auto generated profiles |
+| --- | --- |
+| <img src="docs/screenshots/onboarding-bundled.png" alt="ClusterTune onboarding screen view" width="420"> | <img src="docs/screenshots/onboarding-auto.png" alt="ClusterTune onboarding screen view" width="420"> |
 
 | Main app | Profile editor |
 | --- | --- |
@@ -38,7 +41,7 @@ Lower CPU frequency caps can reduce power draw, which may help lower temperature
 - View the currently applied frequency cap for each cluster.
 - Save, edit, delete, reorder, import, and export profiles.
 - Use bundled profiles for supported devices.
-- Automatically generate profiles (85%/65%/50%) when no bundled SoC profile is available
+- Automatically generate profiles (85%/75%/65%/50%) when no bundled SoC profile is available.
 - Reapply the last profile on boot.
 - Quick Settings tile for fast access.
 - Customizable quick tile behavior
