@@ -78,7 +78,7 @@ fun OnboardingScreen(
     }
 
     var selectedPercentages by remember(allEntries) {
-        mutableStateOf(allEntries.filter { it.percentage > 65 }.map { it.percentage }.toSet())
+        mutableStateOf(allEntries.filter { it.percentage >= 65 }.map { it.percentage }.toSet())
     }
 
     var useBundled by remember { mutableStateOf(bundledProfiles.isNotEmpty()) }
