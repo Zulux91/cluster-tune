@@ -43,12 +43,22 @@ import androidx.compose.ui.unit.dp
 import com.aure.clustertune.data.DeviceProfileGenerator
 import com.aure.clustertune.model.CpuPolicyInfo
 import com.aure.clustertune.model.PerformanceProfile
+import kotlin.math.roundToInt
 
 private data class OnboardingEntry(
     val percentage: Int,
     val name: String,
     val frequencies: Map<Int, Int>,
 )
+
+private fun bundledProfilePercent(profile: PerformanceProfile, policies: List<CpuPolicyInfo>): Int? {
+    val ratios = policies.mapNotNull { policy ->
+        profile.maxFrequencies[policy.id]?.toDouble()?.div(policy.selectableMaxFreq)
+    }
+    if (ratios.isEmpty()) return null
+    val percent = (ratios.average() * 100).roundToInt()
+    return if (percent >= 100) null else percent
+}
 
 private val defaultTiers = listOf(
     Triple(85, "Light Underclock",   "light"),
@@ -82,6 +92,10 @@ fun OnboardingScreen(
     }
 
     var useBundled by remember { mutableStateOf(bundledProfiles.isNotEmpty()) }
+
+    var selectedBundledIds by remember(bundledProfiles) {
+        mutableStateOf(bundledProfiles.map { it.id }.toSet())
+    }
 
     Box(
         modifier = Modifier
@@ -143,7 +157,18 @@ fun OnboardingScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (useBundled && bundledProfiles.isNotEmpty()) {
                         bundledProfiles.forEach { profile ->
-                            BundledProfileCard(profile = profile, policies = policies)
+                            val isSelected = profile.id in selectedBundledIds
+                            BundledProfileCard(
+                                profile = profile,
+                                policies = policies,
+                                isSelected = isSelected,
+                                onToggle = {
+                                    selectedBundledIds = if (isSelected)
+                                        selectedBundledIds - profile.id
+                                    else
+                                        selectedBundledIds + profile.id
+                                },
+                            )
                         }
                     } else {
                         allEntries.forEach { entry ->
@@ -170,7 +195,9 @@ fun OnboardingScreen(
                     onClick = {
                         if (useBundled && bundledProfiles.isNotEmpty()) {
                             onComplete(
-                                bundledProfiles.map { profile -> profile.name to profile.maxFrequencies },
+                                bundledProfiles
+                                    .filter { it.id in selectedBundledIds }
+                                    .map { profile -> profile.name to profile.maxFrequencies },
                                 bundledProfiles.map { it.id },
                             )
                         } else {
@@ -183,7 +210,7 @@ fun OnboardingScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = if (useBundled && bundledProfiles.isNotEmpty()) true
+                    enabled = if (useBundled && bundledProfiles.isNotEmpty()) selectedBundledIds.isNotEmpty()
                               else selectedPercentages.isNotEmpty(),
                 ) {
                     Text("Get Started")
@@ -286,36 +313,63 @@ private fun PercentageBadge(percentage: Int, isSelected: Boolean) {
 private fun BundledProfileCard(
     profile: PerformanceProfile,
     policies: List<CpuPolicyInfo>,
+    isSelected: Boolean,
+    onToggle: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val containerColor = if (isSelected) colorScheme.primaryContainer else colorScheme.surfaceContainerHigh
+    val contentColor = if (isSelected) colorScheme.onPrimaryContainer else colorScheme.onSurface
+    val percent = bundledProfilePercent(profile, policies)
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = colorScheme.primaryContainer),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle),
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = profile.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = colorScheme.onPrimaryContainer,
-            )
-            policies.forEach { policy ->
-                val freq = profile.maxFrequencies[policy.id]
-                if (freq != null) {
-                    val label = if (policies.size > 1)
-                        "Cluster ${policy.id} (${policy.cpuIds.size} cores): ${formatFrequency(freq)}"
-                    else formatFrequency(freq)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        text = profile.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = contentColor,
                     )
+                    if (percent != null) {
+                        PercentageBadge(percentage = percent, isSelected = isSelected)
+                    }
+                }
+                policies.forEach { policy ->
+                    val freq = profile.maxFrequencies[policy.id]
+                    if (freq != null) {
+                        val label = if (policies.size > 1)
+                            "Cluster ${policy.id} (${policy.cpuIds.size} cores): ${formatFrequency(freq)}"
+                        else formatFrequency(freq)
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = contentColor.copy(alpha = 0.7f),
+                        )
+                    }
                 }
             }
+
+            Icon(
+                imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (isSelected) "Selected" else "Not selected",
+                tint = if (isSelected) colorScheme.primary else colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .size(24.dp),
+            )
         }
     }
 }
