@@ -171,6 +171,12 @@ fun OnboardingScreen(
                             )
                         }
                     } else {
+                        Text(
+                            text = "Percentages are target reduction levels. Exact applied values snap to your device's available clock speeds.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
                         allEntries.forEach { entry ->
                             val isSelected = entry.percentage in selectedPercentages
                             EntryCard(
@@ -256,6 +262,7 @@ private fun EntryCard(
                     PercentageBadge(
                         percentage = entry.percentage,
                         isSelected = isSelected,
+                        isNominal = true,
                     )
                 }
 
@@ -289,7 +296,7 @@ private fun EntryCard(
 }
 
 @Composable
-private fun PercentageBadge(percentage: Int, isSelected: Boolean) {
+private fun PercentageBadge(percentage: Int, isSelected: Boolean, isNominal: Boolean = false) {
     val colorScheme = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(999.dp),
@@ -300,7 +307,7 @@ private fun PercentageBadge(percentage: Int, isSelected: Boolean) {
         },
     ) {
         Text(
-            text = "$percentage%",
+            text = if (isNominal) "~$percentage%" else "$percentage%",
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             color = if (isSelected) colorScheme.primary else colorScheme.onPrimaryContainer,
