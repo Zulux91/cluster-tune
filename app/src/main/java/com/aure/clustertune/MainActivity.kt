@@ -187,6 +187,7 @@ class MainActivity : ComponentActivity() {
                     "Imported $importedCount profiles",
                     Toast.LENGTH_SHORT,
                 ).show()
+                QuickSettingsTileRefresher.requestUpdate(this@MainActivity)
             }.onFailure { throwable ->
                 Toast.makeText(
                     applicationContext,

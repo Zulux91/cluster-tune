@@ -209,14 +209,7 @@ class TunerViewModel(
     }
 
     suspend fun importProfilesJson(rawJson: String): Int {
-        val importedCount = repository.importProfilesJson(rawJson)
-        transientMessage.value = if (importedCount == 1) {
-            "Imported 1 profile"
-        } else {
-            "Imported $importedCount profiles"
-        }
-        transientError.value = null
-        return importedCount
+        return repository.importProfilesJson(rawJson)
     }
 
     fun setTileTapBehavior(behavior: TileInteractionBehavior, onSaved: () -> Unit = {}) {
