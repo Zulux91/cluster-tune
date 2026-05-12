@@ -94,7 +94,7 @@ class MainActivity : ComponentActivity() {
                                 importProfilesLauncher.launch(arrayOf("application/json", "text/*"))
                             },
                             onRequestAddQuickSettingsTile = {
-                                requestQuickSettingsTile(showResultToast = true)
+                                requestQuickSettingsTile()
                             },
                             canRequestAddQuickSettingsTile = QuickSettingsTilePrompt.isSupported,
                             isQuickSettingsTileAdded = settings.isQuickSettingsTileAdded,
@@ -130,33 +130,29 @@ class MainActivity : ComponentActivity() {
 
             container.settingsStorage.persistQuickSettingsTilePromptShown()
             if (QuickSettingsTilePrompt.isSupported) {
-                requestQuickSettingsTile(showResultToast = false, showDeclineHint = true)
+                requestQuickSettingsTile(showDeclineHint = true)
             }
         }
     }
 
-    private fun requestQuickSettingsTile(showResultToast: Boolean, showDeclineHint: Boolean = false) {
+    private fun requestQuickSettingsTile(showDeclineHint: Boolean = false) {
         QuickSettingsTilePrompt.request(this) { result ->
             if (result == QuickSettingsTileAddResult.ADDED || result == QuickSettingsTileAddResult.ALREADY_ADDED) {
                 lifecycleScope.launch {
                     container.settingsStorage.persistQuickSettingsTileAdded(true)
                 }
             }
-            if (!showResultToast) {
-                if (showDeclineHint && result == QuickSettingsTileAddResult.NOT_ADDED) {
-                    Toast.makeText(
-                        applicationContext,
-                        "Quick Settings tile not added. You can add it later from the Settings tab.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-                return@request
+            val message = if (showDeclineHint && result == QuickSettingsTileAddResult.NOT_ADDED) {
+                "Quick Settings tile not added. You can add it later from the Settings tab."
+            } else {
+                result.toToastMessage()
             }
-            Toast.makeText(
-                applicationContext,
-                result.toToastMessage(),
-                Toast.LENGTH_SHORT,
-            ).show()
+            val duration = if (result == QuickSettingsTileAddResult.ADDED || result == QuickSettingsTileAddResult.ALREADY_ADDED) {
+                Toast.LENGTH_SHORT
+            } else {
+                Toast.LENGTH_LONG
+            }
+            Toast.makeText(applicationContext, message, duration).show()
         }
     }
 
